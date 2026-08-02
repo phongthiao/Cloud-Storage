@@ -16,7 +16,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const AUTH_API_URL = process.env.AUTH_API_URL || "https://script.google.com/macros/s/AKfycbw-RDeNdYzo7dMnmMRUV2jLkUSCmIN5Fk87suroVvo_bYjyyO05HEKXUcPyf_RLQ_A/exec";
 const BACKUP_SCRIPT_URL = process.env.BACKUP_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbyMkD7y_bCC4l27JZgn5bzmWpch_ZTH208YzapDTw6nMIC4CXD9lUJJ2ccq3wqcsmhLeA/exec";
 
-// 1. API Xác thực Đăng Nhập
+// 1. API Xác thực Đăng Nhập[cite: 5]
 app.post('/api/login', async (req, res) => {
   try {
     const response = await fetch(AUTH_API_URL, {
@@ -31,7 +31,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// 2. API Lấy Bản Sao Lưu
+// 2. API Lấy Bản Sao Lưu[cite: 5]
 app.get('/api/backup', async (req, res) => {
   try {
     const { mtb } = req.query;
@@ -43,7 +43,7 @@ app.get('/api/backup', async (req, res) => {
   }
 });
 
-// 3. API Upload Chunk (Đã Mã Hóa Ngụy Trang Đuôi Thành .dat)
+// 3. API Upload Chunk (Đã Mã Hóa Ngụy Trang Đuôi Thành .dat)[cite: 5]
 app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   try {
     const { token, chatId } = req.body;
@@ -76,10 +76,10 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   }
 });
 
-// 4. API Proxy Tải File / Ghép File từ Telegram (Thay thế Worker Proxy cũ)
+// 4. API Proxy Tải File / Ghép File từ Telegram (Đã sửa lỗi ép tải xuống, hỗ trợ hiển thị trực quan inline)
 app.get('/api/file-proxy', async (req, res) => {
   try {
-    const { token, fileId } = req.query;
+    const { token, fileId, filename } = req.query;
     if (!token || !fileId) return res.status(400).send("Thiếu tham số");
 
     const infoRes = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`);
@@ -90,14 +90,46 @@ app.get('/api/file-proxy', async (req, res) => {
     const fileUrl = `https://api.telegram.org/file/bot${token}/${infoData.result.file_path}`;
     const fileStream = await fetch(fileUrl);
 
-    res.setHeader('Content-Type', 'application/octet-stream');
+    // Xác định kiểu MIME dựa trên phần mở rộng file (nếu có tên file truyền vào)
+    let contentType = 'application/octet-stream';
+    if (filename) {
+      const ext = path.extname(filename).toLowerCase();
+      const mimeTypes = {
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.gif': 'image/gif',
+        '.webp': 'image/webp',
+        '.svg': 'image/svg+xml',
+        '.mp4': 'video/mp4',
+        '.webm': 'video/webm',
+        '.mp3': 'audio/mpeg',
+        '.wav': 'audio/wav',
+        '.pdf': 'application/pdf',
+        '.txt': 'text/plain; charset=utf-8',
+        '.html': 'text/html; charset=utf-8',
+        '.json': 'application/json; charset=utf-8'
+      };
+      if (mimeTypes[ext]) {
+        contentType = mimeTypes[ext];
+      }
+    }
+
+    // Thiết lập header cho phép hiển thị trực tiếp (inline) thay vì ép buộc tải về (attachment)
+    res.setHeader('Content-Type', contentType);
+    if (filename) {
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(filename)}"`);
+    } else {
+      res.setHeader('Content-Disposition', 'inline');
+    }
+
     fileStream.body.pipe(res);
   } catch (err) {
     res.status(500).send("Lỗi tải luồng dữ liệu file");
   }
 });
 
-// 5. API Ghim CSDL lên Telegram
+// 5. API Ghim CSDL lên Telegram[cite: 5]
 app.post('/api/pin-db', async (req, res) => {
   try {
     const { token, chatId, mtb, dbData } = req.body;
@@ -130,7 +162,7 @@ app.post('/api/pin-db', async (req, res) => {
   }
 });
 
-// 6. API Xuất Sao Lưu Cloud Drive
+// 6. API Xuất Sao Lưu Cloud Drive[cite: 5]
 app.post('/api/save-backup', async (req, res) => {
   try {
     await fetch(BACKUP_SCRIPT_URL, {
