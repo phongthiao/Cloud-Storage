@@ -132,6 +132,10 @@
           <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden border border-slate-700">
             <div id="progressBar" class="bg-emerald-500 h-full w-0 transition-all duration-150"></div>
           </div>
+          <div class="flex justify-between text-[10px] text-slate-400 pt-1">
+            <span id="speedText">Tốc độ: 0 MB/s</span>
+            <span id="etaText">Còn lại: --</span>
+          </div>
         </div>
 
         <div class="flex items-center justify-between pt-1">
@@ -233,7 +237,7 @@
     const AUTH_API_URL = "/api/login";
     const BACKUP_SCRIPT_URL = "/api/backup";
 
-    const CHUNK_SIZE = 10 * 1024 * 1024; // Đã giảm xuống 10MB mỗi mảnh
+    const CHUNK_SIZE = 10 * 1024 * 1024; // Cố định 10MB mỗi mảnh
 
     let CURRENT_MTB = localStorage.getItem('cur_mtb') || null;
     let BOT_TOKEN = localStorage.getItem('cur_token') || null;
@@ -446,20 +450,23 @@
       }
     }
 
+    // Nâng cấp: Tích hợp Retry tự động 3 lần khi lỗi và đo tốc độ / ETA mạng
     async function uploadChunkedFile(file, statusText, progressBar, percentText) {
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
       const chunkFileIds = [];
       const fileIdUnique = "file_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
+
+      const speedText = document.getElementById('speedText');
+      const etaText = document.getElementById('etaText');
 
       for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
         if (isCancelled) return null;
         while (isPaused && !isCancelled) await new Promise(r => setTimeout(r, 300));
         if (isCancelled) return null;
 
-        // Khoảng nghỉ an toàn tối ưu tốc độ (0.7 giây) giữa các mảnh để chống spam Telegram
         if (chunkIndex > 0) {
-          statusText.innerText = `⏳ Đang đẩy nhanh tốc độ, chuyển mảnh ${chunkIndex + 1}/${totalChunks}...`;
-          await new Promise(r => setTimeout(r, 700));
+          statusText.innerText = `⏳ Đang gửi tiếp mảnh ${chunkIndex + 1}/${totalChunks}...`;
+          await new Promise(r => setTimeout(r, 600)); // Khoảng nghỉ an toàn chống spam Telegram
         }
 
         const start = chunkIndex * CHUNK_SIZE;
@@ -468,16 +475,32 @@
 
         statusText.innerText = `📦 ${file.name} (Mảnh ${chunkIndex + 1}/${totalChunks} - 10MB)`;
 
-        const fileId = await uploadSingleChunkXHR(chunkBlob, (percent) => {
-          const overallPercent = Math.round(((start + (chunkBlob.size * (percent / 100))) / file.size) * 100);
-          progressBar.style.width = overallPercent + '%';
-          percentText.innerText = overallPercent + '%';
-        });
+        let fileId = null;
+        let retries = 3;
+
+        // Cơ chế Retry tối ưu mạng chập chờn
+        while (retries > 0 && !fileId && !isCancelled) {
+          fileId = await uploadSingleChunkXHR(chunkBlob, (percent, speedMBs, etaSec) => {
+            const overallPercent = Math.round(((start + (chunkBlob.size * (percent / 100))) / file.size) * 100);
+            progressBar.style.width = overallPercent + '%';
+            percentText.innerText = overallPercent + '%';
+            speedText.innerText = `Tốc độ: ${speedMBs} MB/s`;
+            etaText.innerText = `Còn lại: ${etaSec}s`;
+          });
+
+          if (!fileId) {
+            retries--;
+            if (retries > 0) {
+              statusText.innerText = `⚠️ Lỗi mạng, đang tự động thử lại (${3 - retries}/3)...`;
+              await new Promise(r => setTimeout(r, 2000));
+            }
+          }
+        }
 
         if (fileId) {
           chunkFileIds.push(fileId);
         } else {
-          alert(`❌ Lỗi khi tải lên phần ${chunkIndex + 1} của tệp ${file.name}`);
+          alert(`❌ Tải lên thất bại sau nhiều lần thử ở phần ${chunkIndex + 1} của tệp ${file.name}`);
           return null;
         }
       }
@@ -503,19 +526,38 @@
         currentXHR = new XMLHttpRequest();
         currentXHR.open('POST', '/api/upload-chunk', true);
 
+        let lastLoaded = 0;
+        let lastTime = Date.now();
+
         currentXHR.upload.onprogress = (e) => {
           if (e.lengthComputable) {
             const percent = Math.round((e.loaded / e.total) * 100);
-            onProgress(percent);
+            
+            const now = Date.now();
+            const timeDiff = (now - lastTime) / 1000;
+            if (timeDiff >= 0.5) {
+              const loadedDiff = e.loaded - lastLoaded;
+              const speed = (loadedDiff / timeDiff) / (1024 * 1024); // MB/s
+              const remainingBytes = e.total - e.loaded;
+              const eta = speed > 0 ? Math.round(remainingBytes / (speed * 1024 * 1024)) : 0;
+
+              onProgress(percent, speed.toFixed(2), eta);
+              lastLoaded = e.loaded;
+              lastTime = now;
+            }
           }
         };
 
         currentXHR.onload = function() {
           if (currentXHR.status === 200) {
-            const data = JSON.parse(currentXHR.responseText);
-            if (data.success) {
-              resolve(data.file_id);
-            } else resolve(null);
+            try {
+              const data = JSON.parse(currentXHR.responseText);
+              if (data.success) {
+                resolve(data.file_id);
+              } else resolve(null);
+            } catch (e) {
+              resolve(null);
+            }
           } else resolve(null);
         };
 
