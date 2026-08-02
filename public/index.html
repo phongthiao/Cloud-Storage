@@ -456,16 +456,12 @@
       }
     }
 
-    // TẢI SONG SONG CÁC MẢNH THEO ĐÚNG CHUẨN ĐIỀU TIẾT QUY ĐỊNH TELEGRAM + TĂNG LÊN CHÚT ĐỂ AN TOÀN
+    // TẢI SONG SONG CÁC MẢNH SỬ DỤNG ARRAYBUFFER ĐỂ TRÁNH TREO RAM VỚI VIDEO LỚN
     async function uploadChunkedFileParallel(file, statusText, progressBar, percentText) {
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
       const chunkFileIds = new Array(totalChunks);
       const fileIdUnique = "file_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
 
-      const speedText = document.getElementById('speedText');
-      const etaText = document.getElementById('etaText');
-
-      let uploadedBytesTotal = 0;
       let chunkProgressMap = new Array(totalChunks).fill(0);
 
       const updateOverallProgress = () => {
@@ -477,7 +473,6 @@
 
       let currentChunkIndex = 0;
 
-      // Chạy vòng lặp song song với giới hạn CONCURRENT_UPLOADS (2 luồng)
       while (currentChunkIndex < totalChunks && !isCancelled) {
         while (isPaused && !isCancelled) {
           await new Promise(r => setTimeout(r, 400));
@@ -493,14 +488,27 @@
 
           const start = idx * CHUNK_SIZE;
           const end = Math.min(file.size, start + CHUNK_SIZE);
-          const chunkBlob = file.slice(start, end);
 
-          statusText.innerText = `📦 ${file.name} (Đang tải song song các mảnh, hoàn tất: ${chunkFileIds.filter(Boolean).length}/${totalChunks})`;
+          statusText.innerText = `📦 ${file.name} (Đang tải song song phần ${idx + 1}/${totalChunks})`;
 
           batchPromises.push(
-            uploadSingleChunkWithRetry(chunkBlob, idx, (loadedBytes) => {
-              chunkProgressMap[idx] = loadedBytes;
-              updateOverallProgress();
+            new Promise(async (resolve) => {
+              const chunkBlob = file.slice(start, end);
+              // Chuyển blob sang ArrayBuffer giúp giải phóng hoàn toàn RAM, chống treo trình duyệt với file nặng
+              const arrayBuffer = await chunkBlob.arrayBuffer();
+              
+              let retries = 3;
+              let fileId = null;
+              while (retries > 0 && !isCancelled) {
+                fileId = await executeXHRUpload(arrayBuffer, (loadedBytes) => {
+                  chunkProgressMap[idx] = loadedBytes;
+                  updateOverallProgress();
+                });
+                if (fileId) break;
+                retries--;
+                if (retries > 0) await new Promise(r => setTimeout(r, 2000));
+              }
+              resolve(fileId);
             })
           );
         }
@@ -513,14 +521,14 @@
           if (fileId) {
             chunkFileIds[originalIdx] = fileId;
           } else {
-            alert(`❌ Tải lên thất bại ở phần ${originalIdx + 1} của tệp ${file.name}`);
+            alert(`❌ Tải lên thất bại ở phần ${originalIdx + 1} của tệp video ${file.name}`);
             return null;
           }
         }
 
-        // Tạm nghỉ an toàn (Delay nhẹ nhàng giữa các đợt request song song) để tuân thủ Telegram Rate Limit
+        // Nghỉ giãn cách chuẩn an toàn chống nghẽn Rate Limit Telegram cho file lớn
         if (currentChunkIndex < totalChunks) {
-          await new Promise(r => setTimeout(r, 450));
+          await new Promise(r => setTimeout(r, 600));
         }
       }
 
@@ -537,30 +545,12 @@
       };
     }
 
-    function uploadSingleChunkWithRetry(blob, chunkIndex, onChunkProgress) {
-      return new Promise(async (resolve) => {
-        let retries = 3;
-        while (retries > 0 && !isCancelled) {
-          let fileId = await executeXHRUpload(blob, onChunkProgress);
-          if (fileId) {
-            resolve(fileId);
-            return;
-          }
-          retries--;
-          if (retries > 0) {
-            await new Promise(r => setTimeout(r, 2000));
-          }
-        }
-        resolve(null);
-      });
-    }
-
-    function executeXHRUpload(blob, onChunkProgress) {
+    function executeXHRUpload(arrayBuffer, onChunkProgress) {
       return new Promise((resolve) => {
         const formData = new FormData();
         formData.append('token', BOT_TOKEN);
         formData.append('chatId', CHAT_ID);
-        formData.append('document', blob);
+        formData.append('document', new Blob([arrayBuffer]));
 
         const xhr = new XMLHttpRequest();
         activeXHRs.push(xhr);
@@ -578,7 +568,7 @@
             try {
               const data = JSON.parse(xhr.responseText);
               if (data.success) {
-                onChunkProgress(blob.size);
+                onChunkProgress(arrayBuffer.byteLength);
                 resolve(data.file_id);
               } else resolve(null);
             } catch (e) {
