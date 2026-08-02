@@ -89,7 +89,7 @@
         </div>
       </div>
 
-      <!-- Thanh Dung Lượng Chuẩn -->
+      <!-- Thanh Dung Lượng -->
       <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700/60 space-y-2">
         <div class="flex justify-between text-xs font-semibold">
           <span class="text-slate-300">📊 Dung lượng đã sử dụng:</span>
@@ -190,7 +190,7 @@
     </div>
   </div>
 
-  <!-- MODAL PREVIEW -->
+  <!-- MODAL XEM FILE PREVIEW -->
   <div id="previewModal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-4 hidden">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-4xl w-full p-6 space-y-4 shadow-2xl relative flex flex-col max-h-[90vh]">
       <div class="flex justify-between items-center border-b border-slate-700 pb-3">
@@ -230,12 +230,11 @@
   </div>
 
   <script>
-    // Route qua Backend Proxy Node.js trên Render
+    // Định tuyến gọi tới Backend Server Node.js trên Render
     const AUTH_API_URL = "/api/login";
     const BACKUP_SCRIPT_URL = "/api/backup";
 
     const CHUNK_SIZE = 20 * 1024 * 1024; 
-    const urlCache = new Map();
 
     let CURRENT_MTB = localStorage.getItem('cur_mtb') || null;
     let BOT_TOKEN = localStorage.getItem('cur_token') || null;
@@ -321,7 +320,7 @@
     async function autoFetchLatestBackupOnStart() {
       if (!CURRENT_MTB) return;
       try {
-        const res = await fetch(`${BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(CURRENT_MTB)}&t=${Date.now()}`);
+        const res = await fetch(`${BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(CURRENT_MTB)}`);
         const listData = await res.json();
 
         if (listData && listData.length > 0) {
@@ -352,7 +351,7 @@
       if (!BOT_TOKEN || !CHAT_ID) return;
 
       try {
-        const res = await fetch('/api/pin-db', {
+        await fetch('/api/pin-db', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token: BOT_TOKEN, chatId: CHAT_ID, mtb: CURRENT_MTB, dbData: dbFiles })
@@ -811,7 +810,7 @@
       container.innerHTML = `<div class="text-center py-6 text-amber-400 text-xs font-semibold">⏳ Đang lấy danh sách bản sao lưu...</div>`;
 
       try {
-        const res = await fetch(`${BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(CURRENT_MTB)}&t=${Date.now()}`);
+        const res = await fetch(`${BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(CURRENT_MTB)}`);
         const listData = await res.json();
 
         if (!listData || listData.length === 0) {
