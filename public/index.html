@@ -222,7 +222,7 @@
         <h3 class="text-lg font-bold text-purple-400 flex items-center gap-2">
           📜 3 Bản Sao Lưu Mới Nhất
         </h3>
-        <button onclick="closeBackupModal()" class="text-slate-400 hover:text-white text-xl">&times;</button>
+        <button onclick="closeBackupModal()" class="text-slate-400 hover:text-xl text-slate-400 hover:text-white">&times;</button>
       </div>
       <div id="backupListContainer" class="space-y-3 max-h-80 overflow-y-auto pr-1">
         <div class="text-center py-6 text-slate-400 text-xs">Đang kiểm tra các bản lưu gần nhất...</div>
@@ -251,6 +251,9 @@
     let isPaused = false;
     let isCancelled = false;
     let currentXHR = null;
+
+    // Bộ nhớ đệm cache preview để không phải load lại từ đầu nếu đã xem
+    const previewCache = new Map();
 
     window.onload = async () => {
       if (CURRENT_MTB && BOT_TOKEN && CHAT_ID) {
@@ -348,13 +351,15 @@
     }
 
     async function autoTriggerAllBackups() {
-      await autoSaveMainDatabase();
-      await autoExportBackupToCloud();
+      // Chạy song song an toàn và chờ xử lý xong bằng Promise.all
+      await Promise.all([
+        autoSaveMainDatabase(),
+        autoExportBackupToCloud()
+      ]);
     }
 
     async function autoSaveMainDatabase() {
       if (!BOT_TOKEN || !CHAT_ID) return;
-
       try {
         await fetch('/api/pin-db', {
           method: 'POST',
@@ -367,7 +372,6 @@
     async function autoExportBackupToCloud() {
       if (!CURRENT_MTB) return;
       const currentTimeStr = new Date().toLocaleString('vi-VN');
-
       try {
         await fetch('/api/save-backup', {
           method: 'POST',
@@ -450,7 +454,7 @@
       }
     }
 
-    // Nâng cấp: Tích hợp Retry tự động 3 lần khi lỗi và đo tốc độ / ETA mạng
+    // Tích hợp chống spam lệnh liên tục bằng khoảng nghỉ an toàn (Delay) giữa các chunk
     async function uploadChunkedFile(file, statusText, progressBar, percentText) {
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
       const chunkFileIds = [];
@@ -466,7 +470,8 @@
 
         if (chunkIndex > 0) {
           statusText.innerText = `⏳ Đang gửi tiếp mảnh ${chunkIndex + 1}/${totalChunks}...`;
-          await new Promise(r => setTimeout(r, 600)); // Khoảng nghỉ an toàn chống spam Telegram
+          // Tăng thời gian nghỉ nhẹ (800ms) để chống spam liên tục request lên API Telegram
+          await new Promise(r => setTimeout(r, 800)); 
         }
 
         const start = chunkIndex * CHUNK_SIZE;
@@ -478,7 +483,6 @@
         let fileId = null;
         let retries = 3;
 
-        // Cơ chế Retry tối ưu mạng chập chờn
         while (retries > 0 && !fileId && !isCancelled) {
           fileId = await uploadSingleChunkXHR(chunkBlob, (percent, speedMBs, etaSec) => {
             const overallPercent = Math.round(((start + (chunkBlob.size * (percent / 100))) / file.size) * 100);
@@ -598,12 +602,19 @@
       queueCountText.innerText = "Đang ghép tệp...";
 
       try {
-        const fullBlob = await fetchFileBlobFromItem(item, (current, total) => {
-          const percent = Math.round((current / total) * 100);
-          progressBar.style.width = percent + '%';
-          percentText.innerText = percent + '%';
-          statusText.innerText = `📥 Đang ghép mảnh tệp (${current}/${total}): ${item.name}`;
-        });
+        let fullBlob;
+        // Tận dụng cache nếu đã từng tải/xem qua để tối ưu tốc độ
+        if (previewCache.has(itemId)) {
+          fullBlob = previewCache.get(itemId);
+        } else {
+          fullBlob = await fetchFileBlobFromItem(item, (current, total) => {
+            const percent = Math.round((current / total) * 100);
+            progressBar.style.width = percent + '%';
+            percentText.innerText = percent + '%';
+            statusText.innerText = `📥 Đang ghép mảnh tệp (${current}/${total}): ${item.name}`;
+          });
+          previewCache.set(itemId, fullBlob);
+        }
 
         statusText.innerText = "✅ Hoàn tất ghép file! Đang lưu xuống máy...";
         const link = document.createElement('a');
@@ -620,6 +631,7 @@
       }
     }
 
+    // Cải tiến: Lưu cache tài liệu khi bấm xem (Preview) để không bị load lại từ đầu
     async function previewFile(itemId) {
       const item = dbFiles.find(f => f.id === itemId);
       if (!item) return;
@@ -630,12 +642,27 @@
       const downloadBtn = document.getElementById('previewDownloadBtn');
 
       title.innerText = `👁️ Đang xem: ${item.name}`;
-      content.innerHTML = `<div class="text-amber-400 text-xs font-semibold animate-pulse">⏳ Đang tải và ghép nối các phần của file...</div>`;
       downloadBtn.onclick = () => downloadFileById(itemId);
       modal.classList.remove('hidden');
 
+      let fullBlob;
+      if (previewCache.has(itemId)) {
+        // Lấy ngay từ bộ nhớ đệm (Cache) - Không cần chờ load lại từ server/Telegram
+        content.innerHTML = `<div class="text-emerald-400 text-xs font-semibold">⚡ Đã tải từ bộ nhớ đệm nhanh!</div>`;
+        fullBlob = previewCache.get(itemId);
+        await new Promise(r => setTimeout(r, 200)); // Hiển thị thông báo nhanh mượt mà
+      } else {
+        content.innerHTML = `<div class="text-amber-400 text-xs font-semibold animate-pulse">⏳ Đang tải và ghép nối các phần của file lần đầu...</div>`;
+        try {
+          fullBlob = await fetchFileBlobFromItem(item);
+          previewCache.set(itemId, fullBlob); // Lưu vào cache để lần sau xem không cần load lại
+        } catch (err) {
+          content.innerHTML = `<div class="text-rose-400 text-xs font-semibold">❌ Không thể tải hoặc ghép nội dung xem trước!</div>`;
+          return;
+        }
+      }
+
       try {
-        const fullBlob = await fetchFileBlobFromItem(item);
         const url = URL.createObjectURL(fullBlob);
         const ext = item.name.split('.').pop().toLowerCase();
 
@@ -661,7 +688,7 @@
             </div>`;
         }
       } catch (err) {
-        content.innerHTML = `<div class="text-rose-400 text-xs font-semibold">❌ Không thể tải hoặc ghép nội dung xem trước!</div>`;
+        content.innerHTML = `<div class="text-rose-400 text-xs font-semibold">❌ Lỗi hiển thị nội dung xem trước!</div>`;
       }
     }
 
@@ -674,7 +701,6 @@
       if (checkedBoxes.length === 0) return;
 
       const items = checkedBoxes.map(cb => dbFiles.find(f => f.id === cb.value)).filter(f => f && !f.isFolder);
-
       if (items.length === 0) return alert("⚠️ Vui lòng chọn tệp lẻ để tải xuống!");
 
       const downloadBtn = document.getElementById('downloadSelectedBtn');
@@ -727,6 +753,8 @@
       for (let i = 0; i < checkedBoxes.length; i++) {
         const id = checkedBoxes[i].value;
         dbFiles = dbFiles.filter(f => f.id !== id);
+        // Xóa cache tương ứng nếu có để giải phóng RAM
+        if (previewCache.has(id)) previewCache.delete(id);
       }
 
       renderFiles(getCurrentFolderItems());
@@ -745,6 +773,8 @@
       if (!item || !confirm(`Xóa vĩnh viễn "${item.name}"?`)) return;
 
       dbFiles = dbFiles.filter(f => f.id !== id);
+      if (previewCache.has(id)) previewCache.delete(id);
+
       renderFiles(getCurrentFolderItems());
       updateStorageUsage();
 
@@ -909,6 +939,7 @@
         if (Array.isArray(importedData)) {
           if (confirm(`Khôi phục ${importedData.length} mục từ bản sao lưu này?`)) {
             dbFiles = importedData;
+            previewCache.clear(); // Xóa cache cũ khi khôi phục dữ liệu mới
             renderBreadcrumb();
             renderFiles(getCurrentFolderItems());
             updateStorageUsage();
