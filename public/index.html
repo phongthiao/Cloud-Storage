@@ -233,7 +233,7 @@
     const AUTH_API_URL = "/api/login";
     const BACKUP_SCRIPT_URL = "/api/backup";
 
-    const CHUNK_SIZE = 20 * 1024 * 1024; 
+    const CHUNK_SIZE = 10 * 1024 * 1024; // Đã giảm xuống 10MB mỗi mảnh
 
     let CURRENT_MTB = localStorage.getItem('cur_mtb') || null;
     let BOT_TOKEN = localStorage.getItem('cur_token') || null;
@@ -453,19 +453,20 @@
 
       for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
         if (isCancelled) return null;
-        while (isPaused && !isCancelled) await new Promise(r => setTimeout(r, 500));
+        while (isPaused && !isCancelled) await new Promise(r => setTimeout(r, 300));
         if (isCancelled) return null;
 
+        // Khoảng nghỉ an toàn tối ưu tốc độ (0.7 giây) giữa các mảnh để chống spam Telegram
         if (chunkIndex > 0) {
-          statusText.innerText = `⏳ Đang chờ 1.5s trước khi gửi mảnh ${chunkIndex + 1}...`;
-          await new Promise(r => setTimeout(r, 1500));
+          statusText.innerText = `⏳ Đang đẩy nhanh tốc độ, chuyển mảnh ${chunkIndex + 1}/${totalChunks}...`;
+          await new Promise(r => setTimeout(r, 700));
         }
 
         const start = chunkIndex * CHUNK_SIZE;
         const end = Math.min(file.size, start + CHUNK_SIZE);
         const chunkBlob = file.slice(start, end);
 
-        statusText.innerText = `📦 ${file.name} (Mảnh ${chunkIndex + 1}/${totalChunks})`;
+        statusText.innerText = `📦 ${file.name} (Mảnh ${chunkIndex + 1}/${totalChunks} - 10MB)`;
 
         const fileId = await uploadSingleChunkXHR(chunkBlob, (percent) => {
           const overallPercent = Math.round(((start + (chunkBlob.size * (percent / 100))) / file.size) * 100);
@@ -530,7 +531,7 @@
       for (let i = 0; i < chunkIds.length; i++) {
         if (onProgress) onProgress(i + 1, chunkIds.length);
         
-        const proxiedUrl = `/api/file-proxy?token=${BOT_TOKEN}&fileId=${chunkIds[i]}`;
+        const proxiedUrl = `/api/file-proxy?token=${BOT_TOKEN}&fileId=${chunkIds[i]}&filename=${encodeURIComponent(item.name)}`;
         const res = await fetch(proxiedUrl);
         if (!res.ok) throw new Error(`Lỗi khi tải mảnh file ${i + 1}`);
 
