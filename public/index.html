@@ -108,11 +108,9 @@
           ➕ Tạo Thư Mục
         </button>
 
-        <input type="file" id="fileInput" multiple class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 bg-slate-900 rounded-xl border border-slate-700 p-1 cursor-pointer">
+        <input type="file" id="fileInput" multiple class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 bg-slate-900 rounded-xl border border-slate-700 p-1 cursor-pointer" onchange="startBatchUploadQueue()">
 
-        <button onclick="startBatchUploadQueue()" id="uploadBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-6 py-2.5 rounded-xl transition shadow-lg shadow-emerald-600/20 whitespace-nowrap flex items-center justify-center gap-2">
-          <span>📤 Tải Lên Kho</span>
-        </button>
+        <button id="uploadBtn" class="hidden"></button>
       </div>
 
       <!-- KHUNG TIẾN TRÌNH TẢI FILE -->
@@ -222,7 +220,7 @@
         <h3 class="text-lg font-bold text-purple-400 flex items-center gap-2">
           📜 3 Bản Sao Lưu Mới Nhất
         </h3>
-        <button onclick="closeBackupModal()" class="text-slate-400 hover:text-xl text-slate-400 hover:text-white">&times;</button>
+        <button onclick="closeBackupModal()" class="text-slate-400 hover:text-white text-xl">&times;</button>
       </div>
       <div id="backupListContainer" class="space-y-3 max-h-80 overflow-y-auto pr-1">
         <div class="text-center py-6 text-slate-400 text-xs">Đang kiểm tra các bản lưu gần nhất...</div>
@@ -252,7 +250,6 @@
     let isCancelled = false;
     let currentXHR = null;
 
-    // Bộ nhớ đệm cache preview để không phải load lại từ đầu nếu đã xem
     const previewCache = new Map();
 
     window.onload = async () => {
@@ -351,7 +348,6 @@
     }
 
     async function autoTriggerAllBackups() {
-      // Chạy song song an toàn và chờ xử lý xong bằng Promise.all
       await Promise.all([
         autoSaveMainDatabase(),
         autoExportBackupToCloud()
@@ -392,10 +388,11 @@
       const input = document.getElementById('fileInput');
       const files = Array.from(input.files);
 
-      if (files.length === 0) return alert("Vui lòng chọn tệp cần tải lên!");
+      if (files.length === 0) return;
 
       if (!MAX_STORAGE_GB) {
-        return alert("❌ Chưa lấy được khai báo dung lượng hệ thống!");
+        alert("❌ Chưa lấy được khai báo dung lượng hệ thống!");
+        return;
       }
 
       const totalNewBytes = files.reduce((sum, f) => sum + f.size, 0);
@@ -405,6 +402,7 @@
       if (currentUsedBytes + totalNewBytes > maxAllowedBytes) {
         const freeBytes = Math.max(0, maxAllowedBytes - currentUsedBytes);
         alert(`❌ Dung lượng khả dụng không đủ!\n\n• Đã dùng: ${formatBytes(currentUsedBytes)} / ${MAX_STORAGE_GB} GB\n• Còn trống: ${formatBytes(freeBytes)}\n• Tổng tệp tải lên: ${formatBytes(totalNewBytes)}\n\nVui lòng xóa bớt tệp hoặc nâng hạn mức GB!`);
+        input.value = '';
         return;
       }
 
@@ -413,10 +411,8 @@
       const percentText = document.getElementById('percentText');
       const statusText = document.getElementById('statusText');
       const queueCountText = document.getElementById('queueCountText');
-      const uploadBtn = document.getElementById('uploadBtn');
 
       progressModal.classList.remove('hidden');
-      uploadBtn.disabled = true;
 
       isUploading = true;
       isPaused = false;
@@ -440,10 +436,11 @@
       }
 
       if (successCount > 0) {
+        progressBar.style.width = '100%';
+        percentText.innerText = '100%';
         await autoTriggerAllBackups();
       }
 
-      uploadBtn.disabled = false;
       isUploading = false;
 
       if (isCancelled) {
@@ -451,10 +448,16 @@
       } else {
         statusText.innerText = `🎉 Hoàn tất! Đã tải lên ${successCount}/${files.length} tệp.`;
         input.value = '';
+        setTimeout(() => {
+          if (!isUploading) {
+            progressModal.classList.add('hidden');
+            progressBar.style.width = '0%';
+            percentText.innerText = '0%';
+          }
+        }, 2500);
       }
     }
 
-    // Tích hợp chống spam lệnh liên tục bằng khoảng nghỉ an toàn (Delay) giữa các chunk
     async function uploadChunkedFile(file, statusText, progressBar, percentText) {
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
       const chunkFileIds = [];
@@ -470,7 +473,6 @@
 
         if (chunkIndex > 0) {
           statusText.innerText = `⏳ Đang gửi tiếp mảnh ${chunkIndex + 1}/${totalChunks}...`;
-          // Tăng thời gian nghỉ nhẹ (800ms) để chống spam liên tục request lên API Telegram
           await new Promise(r => setTimeout(r, 800)); 
         }
 
@@ -485,7 +487,9 @@
 
         while (retries > 0 && !fileId && !isCancelled) {
           fileId = await uploadSingleChunkXHR(chunkBlob, (percent, speedMBs, etaSec) => {
-            const overallPercent = Math.round(((start + (chunkBlob.size * (percent / 100))) / file.size) * 100);
+            let overallPercent = Math.round(((start + (chunkBlob.size * (percent / 100))) / file.size) * 100);
+            if (overallPercent > 100) overallPercent = 100;
+
             progressBar.style.width = overallPercent + '%';
             percentText.innerText = overallPercent + '%';
             speedText.innerText = `Tốc độ: ${speedMBs} MB/s`;
@@ -508,6 +512,9 @@
           return null;
         }
       }
+
+      progressBar.style.width = '100%';
+      percentText.innerText = '100%';
 
       return {
         id: fileIdUnique,
@@ -535,13 +542,14 @@
 
         currentXHR.upload.onprogress = (e) => {
           if (e.lengthComputable) {
-            const percent = Math.round((e.loaded / e.total) * 100);
+            let percent = Math.round((e.loaded / e.total) * 100);
+            if (percent > 100) percent = 100;
             
             const now = Date.now();
             const timeDiff = (now - lastTime) / 1000;
-            if (timeDiff >= 0.5) {
+            if (timeDiff >= 0.5 || e.loaded === e.total) {
               const loadedDiff = e.loaded - lastLoaded;
-              const speed = (loadedDiff / timeDiff) / (1024 * 1024); // MB/s
+              const speed = timeDiff > 0 ? (loadedDiff / timeDiff) / (1024 * 1024) : 0;
               const remainingBytes = e.total - e.loaded;
               const eta = speed > 0 ? Math.round(remainingBytes / (speed * 1024 * 1024)) : 0;
 
@@ -557,6 +565,7 @@
             try {
               const data = JSON.parse(currentXHR.responseText);
               if (data.success) {
+                onProgress(100, "0.00", 0);
                 resolve(data.file_id);
               } else resolve(null);
             } catch (e) {
@@ -603,7 +612,6 @@
 
       try {
         let fullBlob;
-        // Tận dụng cache nếu đã từng tải/xem qua để tối ưu tốc độ
         if (previewCache.has(itemId)) {
           fullBlob = previewCache.get(itemId);
         } else {
@@ -616,6 +624,8 @@
           previewCache.set(itemId, fullBlob);
         }
 
+        progressBar.style.width = '100%';
+        percentText.innerText = '100%';
         statusText.innerText = "✅ Hoàn tất ghép file! Đang lưu xuống máy...";
         const link = document.createElement('a');
         link.href = URL.createObjectURL(fullBlob);
@@ -627,11 +637,14 @@
       } catch (err) {
         alert("❌ Lỗi trong quá trình kết nối và ghép file: " + err.message);
       } finally {
-        setTimeout(() => progressModal.classList.add('hidden'), 2000);
+        setTimeout(() => {
+          progressModal.classList.add('hidden');
+          progressBar.style.width = '0%';
+          percentText.innerText = '0%';
+        }, 2000);
       }
     }
 
-    // Cải tiến: Lưu cache tài liệu khi bấm xem (Preview) để không bị load lại từ đầu
     async function previewFile(itemId) {
       const item = dbFiles.find(f => f.id === itemId);
       if (!item) return;
@@ -647,15 +660,14 @@
 
       let fullBlob;
       if (previewCache.has(itemId)) {
-        // Lấy ngay từ bộ nhớ đệm (Cache) - Không cần chờ load lại từ server/Telegram
         content.innerHTML = `<div class="text-emerald-400 text-xs font-semibold">⚡ Đã tải từ bộ nhớ đệm nhanh!</div>`;
         fullBlob = previewCache.get(itemId);
-        await new Promise(r => setTimeout(r, 200)); // Hiển thị thông báo nhanh mượt mà
+        await new Promise(r => setTimeout(r, 200));
       } else {
         content.innerHTML = `<div class="text-amber-400 text-xs font-semibold animate-pulse">⏳ Đang tải và ghép nối các phần của file lần đầu...</div>`;
         try {
           fullBlob = await fetchFileBlobFromItem(item);
-          previewCache.set(itemId, fullBlob); // Lưu vào cache để lần sau xem không cần load lại
+          previewCache.set(itemId, fullBlob);
         } catch (err) {
           content.innerHTML = `<div class="text-rose-400 text-xs font-semibold">❌ Không thể tải hoặc ghép nội dung xem trước!</div>`;
           return;
@@ -753,7 +765,6 @@
       for (let i = 0; i < checkedBoxes.length; i++) {
         const id = checkedBoxes[i].value;
         dbFiles = dbFiles.filter(f => f.id !== id);
-        // Xóa cache tương ứng nếu có để giải phóng RAM
         if (previewCache.has(id)) previewCache.delete(id);
       }
 
@@ -939,7 +950,7 @@
         if (Array.isArray(importedData)) {
           if (confirm(`Khôi phục ${importedData.length} mục từ bản sao lưu này?`)) {
             dbFiles = importedData;
-            previewCache.clear(); // Xóa cache cũ khi khôi phục dữ liệu mới
+            previewCache.clear();
             renderBreadcrumb();
             renderFiles(getCurrentFolderItems());
             updateStorageUsage();
