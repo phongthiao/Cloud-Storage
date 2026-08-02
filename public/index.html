@@ -1,148 +1,262 @@
-const express = require('express');
-const cors = require('cors');
-const multer = require('multer');
-const fetch = require('node-fetch');
-const FormData = require('form-data');
-const path = require('path');
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cloud Storage - Render Secured</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-4 sm:p-6 font-sans">
+  
+  <!-- MÀN HÌNH ĐĂNG NHẬP -->
+  <div id="loginScreen" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center z-50 p-4">
+    <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 max-w-md w-full space-y-4 shadow-2xl">
+      <div class="text-center space-y-1">
+        <div class="text-4xl">🔐</div>
+        <h2 class="text-xl font-bold text-indigo-400">Đăng Nhập Cloud Storage</h2>
+        <p class="text-xs text-slate-400">Hệ thống bảo mật qua Render Server</p>
+      </div>
+      
+      <div class="space-y-3">
+        <input type="text" id="inputMTB" placeholder="Mã thiết bị (MTB)..." class="w-full bg-slate-900 border border-slate-700 text-sm px-4 py-2.5 rounded-xl outline-none focus:border-indigo-500 font-mono uppercase">
+        <input type="password" id="inputMK" placeholder="Mật khẩu..." class="w-full bg-slate-900 border border-slate-700 text-sm px-4 py-2.5 rounded-xl outline-none focus:border-indigo-500">
+      </div>
+      
+      <button onclick="loginWithCloud()" id="loginBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-xl transition">
+        🔑 Xác Thực Đăng Nhập
+      </button>
+      <div id="loginStatus" class="text-xs text-center font-medium hidden"></div>
+    </div>
+  </div>
 
-const app = express();
-const upload = multer({ storage: multer.memoryStorage() });
+  <!-- GIAO DIỆN CHÍNH -->
+  <div class="max-w-5xl mx-auto space-y-6">
+    <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 flex justify-between items-center">
+      <div>
+        <h1 class="text-2xl font-bold text-indigo-400">⚡ Cloud Storage (DAT Encrypted)</h1>
+        <p id="userInfoBadge" class="text-xs text-slate-400 mt-1">Thiết bị: ...</p>
+      </div>
+      <button onclick="logout()" class="text-xs bg-rose-600/20 text-rose-300 border border-rose-500/30 px-3 py-2 rounded-xl hover:bg-rose-600/30 transition">🚪 Đăng Xuất</button>
+    </div>
 
-app.use(cors());
-app.use(express.json({ limit: '100mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+    <!-- KHU VỰC TẢI FILE -->
+    <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-3">
+      <div class="flex flex-col sm:flex-row gap-3">
+        <input type="file" id="fileInput" multiple class="block w-full text-sm text-slate-400 bg-slate-900 rounded-xl border border-slate-700 p-1.5 focus:outline-none">
+        <button onclick="startBatchUploadQueue()" id="uploadBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-6 py-2.5 rounded-xl transition whitespace-nowrap">📤 Tải Lên</button>
+      </div>
+      <div id="uploadStatus" class="text-xs text-indigo-400 font-semibold hidden"></div>
+    </div>
 
-// Đọc URL cấu hình bảo mật từ Biến môi trường trên Render
-const AUTH_API_URL = process.env.AUTH_API_URL || "https://script.google.com/macros/s/AKfycbw-RDeNdYzo7dMnmMRUV2jLkUSCmIN5Fk87suroVvo_bYjyyO05HEKXUcPyf_RLQ_A/exec";
-const BACKUP_SCRIPT_URL = process.env.BACKUP_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbyMkD7y_bCC4l27JZgn5bzmWpch_ZTH208YzapDTw6nMIC4CXD9lUJJ2ccq3wqcsmhLeA/exec";
+    <!-- DANH SÁCH FILE -->
+    <div class="bg-slate-800 rounded-2xl border border-slate-700 p-4">
+      <h2 class="font-bold text-slate-200 mb-3">📂 Danh Sách File</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-slate-300">
+          <thead class="bg-slate-900/50 text-slate-400 text-xs uppercase">
+            <tr>
+              <th class="p-3">Tên file</th>
+              <th class="p-3">Kích thước</th>
+              <th class="p-3">Ngày tạo</th>
+              <th class="p-3 text-right">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody id="fileTableBody" class="divide-y divide-slate-700/50">
+            <tr><td colspan="4" class="p-4 text-center text-slate-500">Chưa có dữ liệu</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 
-// 1. API Xác thực Đăng Nhập
-app.post('/api/login', async (req, res) => {
-  try {
-    const response = await fetch(AUTH_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(req.body)
-    });
-    const data = await response.json();
-    res.json(data);
-  } catch (err) {
-    res.status(500).json({ success: false, message: "Lỗi xác thực từ Server" });
-  }
-});
+  <script>
+    const CHUNK_SIZE = 20 * 1024 * 1024; // Mảnh cắt 20 MB
+    let CURRENT_MTB = localStorage.getItem('cur_mtb') || null;
+    let BOT_TOKEN = localStorage.getItem('cur_token') || null;
+    let CHAT_ID = localStorage.getItem('cur_chatid') || null;
+    let dbFiles = [];
 
-// 2. API Lấy Bản Sao Lưu
-app.get('/api/backup', async (req, res) => {
-  try {
-    const { mtb } = req.query;
-    const response = await fetch(`${BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(mtb)}&t=${Date.now()}`);
-    const data = await response.json();
-    res.json(data);
-  } catch (err) {
-    res.status(500).json({ error: "Lỗi lấy bản sao lưu" });
-  }
-});
+    window.onload = async () => {
+      if (CURRENT_MTB && BOT_TOKEN && CHAT_ID) {
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('userInfoBadge').innerText = `Thiết bị: ${CURRENT_MTB}`;
+        await loadBackup();
+      }
+    };
 
-// 3. API Upload Chunk (Đã Mã Hóa Ngụy Trang Đuôi Thành .dat)
-app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
-  try {
-    const { token, chatId } = req.body;
-    const file = req.file;
+    async function loginWithCloud() {
+      const mtb = document.getElementById('inputMTB').value.trim().toUpperCase();
+      const mk = document.getElementById('inputMK').value.trim();
+      const statusDiv = document.getElementById('loginStatus');
 
-    if (!token || !chatId || !file) {
-      return res.status(400).json({ success: false, message: "Thiếu thông tin tải lên" });
+      if (!mtb || !mk) return alert("Vui lòng nhập đầy đủ thông tin!");
+
+      statusDiv.className = "text-xs text-center text-amber-400";
+      statusDiv.innerText = "⏳ Đang xác thực qua Render Server...";
+      statusDiv.classList.remove('hidden');
+
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mtb, mk })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          CURRENT_MTB = mtb;
+          BOT_TOKEN = data.token;
+          CHAT_ID = data.chatId;
+
+          localStorage.setItem('cur_mtb', CURRENT_MTB);
+          localStorage.setItem('cur_token', BOT_TOKEN);
+          localStorage.setItem('cur_chatid', CHAT_ID);
+
+          document.getElementById('loginScreen').classList.add('hidden');
+          document.getElementById('userInfoBadge').innerText = `Thiết bị: ${CURRENT_MTB}`;
+          await loadBackup();
+        } else {
+          statusDiv.innerText = "❌ " + (data.message || "Sai tài khoản!");
+        }
+      } catch (err) {
+        statusDiv.innerText = "❌ Lỗi kết nối Server Render!";
+      }
     }
 
-    // Ép đổi tên mảnh file thành định dạng .dat mã hóa khi tải lên Telegram
-    const datFileName = `data_chunk_${Date.now()}_${Math.floor(Math.random() * 10000)}.dat`;
-
-    const formData = new FormData();
-    formData.append('chat_id', chatId);
-    formData.append('document', file.buffer, datFileName);
-
-    const tgRes = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
-      method: 'POST',
-      body: formData
-    });
-
-    const tgData = await tgRes.json();
-    if (tgData.ok && tgData.result.document) {
-      res.json({ success: true, file_id: tgData.result.document.file_id });
-    } else {
-      res.status(400).json({ success: false, message: tgData.description || "Lỗi tải lên Telegram" });
+    async function loadBackup() {
+      try {
+        const res = await fetch(`/api/backup?mtb=${encodeURIComponent(CURRENT_MTB)}`);
+        const listData = await res.json();
+        if (listData && listData.length > 0) {
+          const latestItem = listData[listData.length - 1];
+          const fullData = (latestItem.mainData || "") + (latestItem.subData || "") || latestItem.backupData;
+          dbFiles = typeof fullData === 'string' ? JSON.parse(fullData) : fullData;
+        }
+      } catch (e) {
+        dbFiles = [];
+      }
+      renderFiles();
     }
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
 
-// 4. API Proxy Tải File / Ghép File từ Telegram (Thay thế Worker Proxy cũ)
-app.get('/api/file-proxy', async (req, res) => {
-  try {
-    const { token, fileId } = req.query;
-    if (!token || !fileId) return res.status(400).send("Thiếu tham số");
+    async function startBatchUploadQueue() {
+      const files = Array.from(document.getElementById('fileInput').files);
+      if (files.length === 0) return alert("Vui lòng chọn tệp!");
 
-    const infoRes = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`);
-    const infoData = await infoRes.json();
+      const statusText = document.getElementById('uploadStatus');
+      statusText.classList.remove('hidden');
 
-    if (!infoData.ok) return res.status(400).send("Không lấy được link file");
+      for (let file of files) {
+        const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+        const chunkIds = [];
 
-    const fileUrl = `https://api.telegram.org/file/bot${token}/${infoData.result.file_path}`;
-    const fileStream = await fetch(fileUrl);
+        for (let i = 0; i < totalChunks; i++) {
+          if (i > 0) {
+            statusText.innerText = `⏳ Chờ 1.5s Anti-spam Telegram trước khi gửi mảnh ${i + 1}...`;
+            await new Promise(r => setTimeout(r, 1500));
+          }
 
-    res.setHeader('Content-Type', 'application/octet-stream');
-    fileStream.body.pipe(res);
-  } catch (err) {
-    res.status(500).send("Lỗi tải luồng dữ liệu file");
-  }
-});
+          statusText.innerText = `📦 Đang mã hóa & tải ${file.name} (Mảnh ${i+1}/${totalChunks})...`;
+          const start = i * CHUNK_SIZE;
+          const chunkBlob = file.slice(start, Math.min(file.size, start + CHUNK_SIZE));
 
-// 5. API Ghim CSDL lên Telegram
-app.post('/api/pin-db', async (req, res) => {
-  try {
-    const { token, chatId, mtb, dbData } = req.body;
-    const blob = Buffer.from(JSON.stringify(dbData));
+          const formData = new FormData();
+          formData.append('token', BOT_TOKEN);
+          formData.append('chatId', CHAT_ID);
+          // Gửi dữ liệu chunk dưới định dạng .dat mã hóa
+          formData.append('document', chunkBlob, `encrypted_chunk_${i+1}.dat`);
 
-    const formData = new FormData();
-    formData.append('chat_id', chatId);
-    formData.append('document', blob, `database_${mtb}.json`);
+          const res = await fetch('/api/upload-chunk', { method: 'POST', body: formData });
+          const data = await res.json();
 
-    const tgRes = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
-      method: 'POST',
-      body: formData
-    });
+          if (data.success) {
+            chunkIds.push(data.file_id);
+          } else {
+            alert(`Lỗi upload mảnh ${i+1}`);
+            return;
+          }
+        }
 
-    const tgData = await tgRes.json();
-    if (tgData.ok && tgData.result.message_id) {
-      await fetch(`https://api.telegram.org/bot${token}/pinChatMessage`, {
+        // Lưu thông tin gốc (bao gồm Tên thật) vào CSDL ứng dụng
+        dbFiles.unshift({
+          id: "file_" + Date.now(),
+          name: file.name, // Giữ tên gốc để khôi phục khi tải về
+          size: file.size,
+          chunks: chunkIds,
+          date: new Date().toLocaleString('vi-VN')
+        });
+      }
+
+      statusText.innerText = "🎉 Hoàn tất! Đang đồng bộ dữ liệu...";
+      renderFiles();
+      await saveBackup();
+      statusText.classList.add('hidden');
+      document.getElementById('fileInput').value = "";
+    }
+
+    async function saveBackup() {
+      await fetch('/api/save-backup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          chat_id: chatId,
-          message_id: tgData.result.message_id,
-          disable_notification: true
+          mtb: CURRENT_MTB,
+          time: new Date().toLocaleString('vi-VN'),
+          backupData: JSON.stringify(dbFiles)
         })
       });
     }
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ success: false });
-  }
-});
 
-// 6. API Xuất Sao Lưu Cloud Drive
-app.post('/api/save-backup', async (req, res) => {
-  try {
-    await fetch(BACKUP_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req.body)
-    });
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ success: false });
-  }
-});
+    function renderFiles() {
+      const tbody = document.getElementById('fileTableBody');
+      if (dbFiles.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-500">Chưa có tệp nào.</td></tr>`;
+        return;
+      }
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server Render đang chạy tại port ${PORT}`));
+      tbody.innerHTML = dbFiles.map(f => `
+        <tr class="hover:bg-slate-700/30">
+          <td class="p-3 font-semibold text-slate-200">📄 ${f.name}</td>
+          <td class="p-3 text-xs text-slate-400">${(f.size / (1024*1024)).toFixed(2)} MB</td>
+          <td class="p-3 text-xs text-slate-400">${f.date || '---'}</td>
+          <td class="p-3 text-right">
+            <button onclick="downloadFile('${f.id}')" class="bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 px-3 py-1 rounded-lg text-xs font-semibold hover:bg-emerald-600/40 transition">⬇️ Tải Về</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function downloadFile(id) {
+      const item = dbFiles.find(f => f.id === id);
+      if (!item) return;
+
+      const statusText = document.getElementById('uploadStatus');
+      statusText.innerText = `⏳ Đang giải mã và tải tệp ${item.name}...`;
+      statusText.classList.remove('hidden');
+
+      try {
+        const blobs = [];
+        for (let chunkId of item.chunks) {
+          const res = await fetch(`/api/file-proxy?token=${BOT_TOKEN}&fileId=${chunkId}`);
+          const blob = await res.blob();
+          blobs.push(blob);
+        }
+
+        // Tự động ghép các mảnh file .dat lại và chuyển về tên + định dạng gốc
+        const fullBlob = new Blob(blobs, { type: 'application/octet-stream' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(fullBlob);
+        link.download = item.name; // Tải về đúng tên file nguyên bản
+        link.click();
+      } catch (err) {
+        alert("Lỗi trong quá trình tải và giải mã tệp!");
+      }
+
+      statusText.classList.add('hidden');
+    }
+
+    function logout() {
+      localStorage.clear();
+      location.reload();
+    }
+  </script>
+</body>
+</html>
