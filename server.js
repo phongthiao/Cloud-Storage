@@ -15,7 +15,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 const AUTH_API_URL = process.env.AUTH_API_URL || "https://script.google.com/macros/s/AKfycbw-RDeNdYzo7dMnmMRUV2jLkUSCmIN5Fk87suroVvo_bYjyyO05HEKXUcPyf_RLQ_A/exec";
 const BACKUP_SCRIPT_URL = process.env.BACKUP_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbyMkD7y_bCC4l27JZgn5bzmWpch_ZTH208YzapDTw6nMIC4CXD9lUJJ2ccq3wqcsmhLeA/exec";
 
-// 1. API Xác thực Đăng Nhập[cite: 5]
 app.post('/api/login', async (req, res) => {
   try {
     const response = await fetch(AUTH_API_URL, {
@@ -30,7 +29,6 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// 2. API Lấy Bản Sao Lưu[cite: 5]
 app.get('/api/backup', async (req, res) => {
   try {
     const { mtb } = req.query;
@@ -42,7 +40,6 @@ app.get('/api/backup', async (req, res) => {
   }
 });
 
-// 3. API Upload Chunk[cite: 5]
 app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   try {
     const { token, chatId } = req.body;
@@ -73,7 +70,6 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   }
 });
 
-// 4. API Proxy Tải File / Ghép File từ Telegram[cite: 5]
 app.get('/api/file-proxy', async (req, res) => {
   try {
     const { token, fileId, filename } = req.query;
@@ -112,7 +108,6 @@ app.get('/api/file-proxy', async (req, res) => {
   }
 });
 
-// 5. API Ghim CSDL lên Telegram[cite: 5]
 app.post('/api/pin-db', async (req, res) => {
   try {
     const { token, chatId, mtb, dbData } = req.body;
@@ -145,7 +140,6 @@ app.post('/api/pin-db', async (req, res) => {
   }
 });
 
-// 6. API Xuất Sao Lưu Cloud Drive[cite: 5]
 app.post('/api/save-backup', async (req, res) => {
   try {
     await fetch(BACKUP_SCRIPT_URL, {
