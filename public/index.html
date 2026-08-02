@@ -93,7 +93,8 @@
       <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700/60 space-y-2">
         <div class="flex justify-between text-xs font-semibold">
           <span class="text-slate-300">📊 Dung lượng đã sử dụng:</span>
-          <span id="storageUsageText" class="text-indigo-400 font-bold">0 MB / 100 GB (0%)</span>
+          <!-- Đã cập nhật hiển thị trạng thái chờ tải -->
+          <span id="storageUsageText" class="text-indigo-400 font-bold">⏳ Đang tải hạn mức...</span>
         </div>
         <div class="w-full bg-slate-800 h-3 rounded-full overflow-hidden border border-slate-700">
           <div id="storageProgressBar" class="bg-gradient-to-r from-indigo-500 to-purple-500 h-full w-0 transition-all duration-300"></div>
@@ -239,7 +240,8 @@
     let CURRENT_MTB = localStorage.getItem('cur_mtb') || null;
     let BOT_TOKEN = localStorage.getItem('cur_token') || null;
     let CHAT_ID = localStorage.getItem('cur_chatid') || null;
-    let MAX_STORAGE_GB = parseFloat(localStorage.getItem('cur_max_gb')) || 100;
+    // Đã sửa mặc định thành 0 khi chưa đăng nhập / chưa lấy được dữ liệu từ Sheet
+    let MAX_STORAGE_GB = parseFloat(localStorage.getItem('cur_max_gb')) || 0;
 
     let dbFiles = [];
     let currentFolderId = null;
@@ -283,7 +285,7 @@
           CURRENT_MTB = mtb;
           BOT_TOKEN = resData.token;
           CHAT_ID = resData.chatId;
-          MAX_STORAGE_GB = resData.maxGb || 100;
+          MAX_STORAGE_GB = resData.maxGb || 0;
 
           localStorage.setItem('cur_mtb', CURRENT_MTB);
           localStorage.setItem('cur_token', BOT_TOKEN);
@@ -308,7 +310,7 @@
         console.error("Lỗi xác thực:", err);
         statusDiv.className = "text-xs text-center font-medium text-rose-400";
         statusDiv.innerText = "❌ Lỗi kết nối hệ thống!";
-      } finally {
+      } font-medium; finally {
         loginBtn.disabled = false;
       }
     }
@@ -559,7 +561,7 @@
 
         statusText.innerText = "✅ Hoàn tất ghép file! Đang lưu xuống máy...";
         const link = document.createElement('a');
-        link.href = URL.createObjectURL(fullBlob);
+        link.href = URL.revokeObjectURL ? URL.createObjectURL(fullBlob) : '';
         link.download = item.name;
         document.body.appendChild(link);
         link.click();
@@ -887,6 +889,9 @@
     }
 
     function updateStorageUsage() {
+      // Nếu chưa có hạn mức từ Google Sheet thì bỏ qua cập nhật hiển thị
+      if (!MAX_STORAGE_GB || MAX_STORAGE_GB === 0) return;
+
       const maxBytes = MAX_STORAGE_GB * 1024 * 1024 * 1024;
       const totalBytes = dbFiles.reduce((sum, item) => sum + (item.size || 0), 0);
       const usedPercentage = Math.min(100, ((totalBytes / maxBytes) * 100).toFixed(1));
