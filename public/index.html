@@ -252,6 +252,9 @@
     let isCancelled = false;
     let currentXHR = null;
 
+    // Bộ nhớ Cache tạm thời lưu các file đã xem (giữ trong RAM trình duyệt một lúc để mở lại siêu nhanh)
+    const previewCache = new Map();
+
     window.onload = async () => {
       if (CURRENT_MTB && BOT_TOKEN && CHAT_ID) {
         document.getElementById('loginScreen').classList.add('hidden');
@@ -450,7 +453,6 @@
       }
     }
 
-    // Nâng cấp: Tích hợp Retry tự động 3 lần khi lỗi và đo tốc độ / ETA mạng
     async function uploadChunkedFile(file, statusText, progressBar, percentText) {
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
       const chunkFileIds = [];
@@ -466,7 +468,7 @@
 
         if (chunkIndex > 0) {
           statusText.innerText = `⏳ Đang gửi tiếp mảnh ${chunkIndex + 1}/${totalChunks}...`;
-          await new Promise(r => setTimeout(r, 600)); // Khoảng nghỉ an toàn chống spam Telegram
+          await new Promise(r => setTimeout(r, 600));
         }
 
         const start = chunkIndex * CHUNK_SIZE;
@@ -478,7 +480,6 @@
         let fileId = null;
         let retries = 3;
 
-        // Cơ chế Retry tối ưu mạng chập chờn
         while (retries > 0 && !fileId && !isCancelled) {
           fileId = await uploadSingleChunkXHR(chunkBlob, (percent, speedMBs, etaSec) => {
             const overallPercent = Math.round(((start + (chunkBlob.size * (percent / 100))) / file.size) * 100);
@@ -491,7 +492,7 @@
           if (!fileId) {
             retries--;
             if (retries > 0) {
-              statusText.innerText = `⚠️ Lỗi mạng, đang tự động thử lại (${3 - retries}/3)...`;
+              statusText.innerText = `⚠️ Lỗi mạng, đang thử lại (${3 - retries}/3)...`;
               await new Promise(r => setTimeout(r, 2000));
             }
           }
@@ -500,7 +501,7 @@
         if (fileId) {
           chunkFileIds.push(fileId);
         } else {
-          alert(`❌ Tải lên thất bại sau nhiều lần thử ở phần ${chunkIndex + 1} của tệp ${file.name}`);
+          alert(`❌ Tải lên thất bại ở phần ${chunkIndex + 1} của tệp ${file.name}`);
           return null;
         }
       }
@@ -535,9 +536,11 @@
             
             const now = Date.now();
             const timeDiff = (now - lastTime) / 1000;
-            if (timeDiff >= 0.5) {
+            
+            // Sửa lỗi: Cập nhật ngay lập tức nếu file nhẹ hoặc khoảng thời gian ngắn để tránh bỏ sót
+            if (timeDiff >= 0.1 || percent === 100) {
               const loadedDiff = e.loaded - lastLoaded;
-              const speed = (loadedDiff / timeDiff) / (1024 * 1024); // MB/s
+              const speed = timeDiff > 0 ? (loadedDiff / timeDiff) / (1024 * 1024) : 0;
               const remainingBytes = e.total - e.loaded;
               const eta = speed > 0 ? Math.round(remainingBytes / (speed * 1024 * 1024)) : 0;
 
@@ -553,6 +556,8 @@
             try {
               const data = JSON.parse(currentXHR.responseText);
               if (data.success) {
+                // Đảm bảo thanh tiến trình nhảy lên 100% khi kết thúc chunk nhẹ/nhanh
+                onProgress(100, "0.00", 0);
                 resolve(data.file_id);
               } else resolve(null);
             } catch (e) {
@@ -620,6 +625,7 @@
       }
     }
 
+    // Nâng cấp: Tích hợp Cache xem trước file (Lưu trong RAM trình duyệt, mở lại xem ngay lập tức không cần đợi ghép lại)
     async function previewFile(itemId) {
       const item = dbFiles.find(f => f.id === itemId);
       if (!item) return;
@@ -630,38 +636,57 @@
       const downloadBtn = document.getElementById('previewDownloadBtn');
 
       title.innerText = `👁️ Đang xem: ${item.name}`;
-      content.innerHTML = `<div class="text-amber-400 text-xs font-semibold animate-pulse">⏳ Đang tải và ghép nối các phần của file...</div>`;
       downloadBtn.onclick = () => downloadFileById(itemId);
       modal.classList.remove('hidden');
 
+      let url = "";
+
+      // Kiểm tra nếu file đã được lưu trong Cache RAM trình duyệt trước đó
+      if (previewCache.has(itemId)) {
+        url = previewCache.get(itemId);
+        renderPreviewContent(url, item, content);
+        return;
+      }
+
+      content.innerHTML = `<div class="text-amber-400 text-xs font-semibold animate-pulse">⏳ Đang tải và ghép nối các phần của file lần đầu...</div>`;
+
       try {
         const fullBlob = await fetchFileBlobFromItem(item);
-        const url = URL.createObjectURL(fullBlob);
-        const ext = item.name.split('.').pop().toLowerCase();
+        url = URL.createObjectURL(fullBlob);
+        
+        // Lưu vào Cache để lần sau mở lại lập tức
+        previewCache.set(itemId, url);
 
-        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) {
-          content.innerHTML = `<img src="${url}" class="max-h-[70vh] max-w-full rounded-lg object-contain border border-slate-700 shadow-md" alt="${item.name}">`;
-        } else if (['mp4', 'webm', 'ogg', 'mov'].includes(ext)) {
-          content.innerHTML = `<video controls src="${url}" class="max-h-[70vh] max-w-full rounded-lg shadow-md"></video>`;
-        } else if (['mp3', 'wav', 'm4a'].includes(ext)) {
-          content.innerHTML = `<audio controls src="${url}" class="w-full max-w-md"></audio>`;
-        } else if (['txt', 'json', 'js', 'html', 'css', 'csv', 'md'].includes(ext)) {
-          const text = await fullBlob.text();
-          content.innerHTML = `<pre class="text-xs text-emerald-400 font-mono w-full max-h-[65vh] overflow-auto text-left whitespace-pre-wrap bg-slate-950 p-4 rounded-lg border border-slate-800">${escapeHtml(text)}</pre>`;
-        } else if (ext === 'pdf') {
-          content.innerHTML = `<iframe src="${url}" class="w-full h-[65vh] rounded-lg border border-slate-700"></iframe>`;
-        } else {
-          content.innerHTML = `
-            <div class="text-center space-y-3 p-4">
-              <div class="text-4xl">📄</div>
-              <div class="text-xs text-slate-300">Định dạng <strong>.${ext}</strong> không hỗ trợ xem trực tiếp.</div>
-              <button onclick="downloadFileById('${itemId}')" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-2 rounded-xl font-semibold">
-                ⬇️ Tải Xuống Ngay
-              </button>
-            </div>`;
-        }
+        renderPreviewContent(url, item, content);
       } catch (err) {
         content.innerHTML = `<div class="text-rose-400 text-xs font-semibold">❌ Không thể tải hoặc ghép nội dung xem trước!</div>`;
+      }
+    }
+
+    async function renderPreviewContent(url, item, content) {
+      const ext = item.name.split('.').pop().toLowerCase();
+
+      if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) {
+        content.innerHTML = `<img src="${url}" class="max-h-[70vh] max-w-full rounded-lg object-contain border border-slate-700 shadow-md" alt="${item.name}">`;
+      } else if (['mp4', 'webm', 'ogg', 'mov'].includes(ext)) {
+        content.innerHTML = `<video controls src="${url}" class="max-h-[70vh] max-w-full rounded-lg shadow-md"></video>`;
+      } else if (['mp3', 'wav', 'm4a'].includes(ext)) {
+        content.innerHTML = `<audio controls src="${url}" class="w-full max-w-md"></audio>`;
+      } else if (['txt', 'json', 'js', 'html', 'css', 'csv', 'md'].includes(ext)) {
+        const res = await fetch(url);
+        const text = await res.text();
+        content.innerHTML = `<pre class="text-xs text-emerald-400 font-mono w-full max-h-[65vh] overflow-auto text-left whitespace-pre-wrap bg-slate-950 p-4 rounded-lg border border-slate-800">${escapeHtml(text)}</pre>`;
+      } else if (ext === 'pdf') {
+        content.innerHTML = `<iframe src="${url}" class="w-full h-[65vh] rounded-lg border border-slate-700"></iframe>`;
+      } else {
+        content.innerHTML = `
+          <div class="text-center space-y-3 p-4">
+            <div class="text-4xl">📄</div>
+            <div class="text-xs text-slate-300">Định dạng <strong>.${ext}</strong> không hỗ trợ xem trực tiếp.</div>
+            <button onclick="downloadFileById('${item.id}')" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-2 rounded-xl font-semibold">
+              ⬇️ Tải Xuống Ngay
+            </button>
+          </div>`;
       }
     }
 
@@ -727,6 +752,7 @@
       for (let i = 0; i < checkedBoxes.length; i++) {
         const id = checkedBoxes[i].value;
         dbFiles = dbFiles.filter(f => f.id !== id);
+        previewCache.delete(id); // Xóa khỏi cache nếu xóa file
       }
 
       renderFiles(getCurrentFolderItems());
@@ -745,6 +771,7 @@
       if (!item || !confirm(`Xóa vĩnh viễn "${item.name}"?`)) return;
 
       dbFiles = dbFiles.filter(f => f.id !== id);
+      previewCache.delete(id); // Xóa khỏi cache
       renderFiles(getCurrentFolderItems());
       updateStorageUsage();
 
@@ -909,6 +936,7 @@
         if (Array.isArray(importedData)) {
           if (confirm(`Khôi phục ${importedData.length} mục từ bản sao lưu này?`)) {
             dbFiles = importedData;
+            previewCache.clear(); // Xóa cache khi khôi phục dữ liệu mới
             renderBreadcrumb();
             renderFiles(getCurrentFolderItems());
             updateStorageUsage();
