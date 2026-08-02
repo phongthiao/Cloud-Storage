@@ -4,12 +4,15 @@ const multer = require('multer');
 const fetch = require('node-fetch');
 const FormData = require('form-data');
 const path = require('path');
+const { pipeline } = require('stream');
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(cors());
-app.use(express.json({ limit: '100mb' }));
+// Tăng giới hạn payload lên 200mb để đảm bảo lưu database lớn không bị lỗi
+app.use(express.json({ limit: '200mb' }));
+app.use(express.urlencoded({ limit: '200mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const AUTH_API_URL = process.env.AUTH_API_URL || "https://script.google.com/macros/s/AKfycbw-RDeNdYzo7dMnmMRUV2jLkUSCmIN5Fk87suroVvo_bYjyyO05HEKXUcPyf_RLQ_A/exec";
@@ -73,7 +76,7 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   }
 });
 
-// 4. API Proxy Tải File / Ghép File từ Telegram[cite: 5]
+// 4. API Proxy Tải File / Ghép File từ Telegram (Đã cải tiến dùng pipeline an toàn)[cite: 5]
 app.get('/api/file-proxy', async (req, res) => {
   try {
     const { token, fileId, filename } = req.query;
@@ -106,7 +109,12 @@ app.get('/api/file-proxy', async (req, res) => {
       res.setHeader('Content-Disposition', 'inline');
     }
 
-    fileStream.body.pipe(res);
+    // Sử dụng pipeline chuẩn hóa để tránh treo kết nối Stream
+    pipeline(fileStream.body, res, (err) => {
+      if (err && err.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
+        console.error('Lỗi đường ống truyền tải Stream:', err);
+      }
+    });
   } catch (err) {
     res.status(500).send("Lỗi tải luồng dữ liệu file");
   }
