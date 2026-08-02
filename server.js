@@ -9,7 +9,9 @@ const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(cors());
-app.use(express.json({ limit: '100mb' }));
+// Mở rộng giới hạn body size lên 1GB để xử lý mượt mà các mảnh dữ liệu video lớn
+app.use(express.json({ limit: '1GB' }));
+app.use(express.urlencoded({ limit: '1GB', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const AUTH_API_URL = process.env.AUTH_API_URL || "https://script.google.com/macros/s/AKfycbw-RDeNdYzo7dMnmMRUV2jLkUSCmIN5Fk87suroVvo_bYjyyO05HEKXUcPyf_RLQ_A/exec";
