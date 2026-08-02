@@ -1,149 +1,112 @@
 const express = require('express');
 const cors = require('cors');
-const axios = require('axios');
+const multer = require('multer');
+const fetch = require('node-fetch');
+const FormData = require('form-data');
 const path = require('path');
 
 const app = express();
+const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(cors());
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ extended: true, limit: '100mb' }));
-
-// Phục vụ tệp tĩnh giao diện ở thư mục public
+app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Đọc cấu hình từ Biến môi trường (Environment Variables)
-const DATA_CLOUD_URL = process.env.DATA_CLOUD_URL || "https://docs.google.com/spreadsheets/d/e/2PACX-1vS7iLGeDWa7Yarmlwyt51YQkyvTAFQYO591BxiFnGR_QFCAqIP-OSUH_mzEZcZZOQ_9EJX-5sXKjOCd/pub?output=csv";
-const BACKUP_SCRIPT_URL = process.env.BACKUP_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbyMkD7y_bCC4l27JZgn5bzmWpch_ZTH208YzapDTw6nMIC4CXD9lUJJ2ccq3wqcsmhLeA/exec";
+// Lấy thông tin nhạy cảm từ Environment Variables của Render
+const AUTH_API_URL = process.env.AUTH_API_URL;
+const BACKUP_SCRIPT_URL = process.env.BACKUP_SCRIPT_URL;
 
-// Hàm xử lý CSV chuẩn
-function parseCSV(text) {
-  const lines = text.split(/\r\n|\n/);
-  const result = [];
-  for (let i = 0; i < lines.length; i++) {
-    if (!lines[i].trim()) continue;
-    const row = [];
-    let insideQuote = false;
-    let entry = '';
-    for (let j = 0; j < lines[i].length; j++) {
-      const char = lines[i][j];
-      if (char === '"') {
-        insideQuote = !insideQuote;
-      } else if (char === ',' && !insideQuote) {
-        row.push(entry.trim());
-        entry = '';
-      } else {
-        entry += char;
-      }
-    }
-    row.push(entry.trim());
-    result.push(row);
-  }
-  return result;
-}
-
-// 1. API Xác thực đăng nhập
+// 1. API Đăng Nhập
 app.post('/api/login', async (req, res) => {
-  const { mtb, mk } = req.body;
-  if (!mtb || !mk) {
-    return res.status(400).json({ success: false, message: "Thành phần đăng nhập không hợp lệ!" });
-  }
-
   try {
-    const response = await axios.get(`${DATA_CLOUD_URL}&t=${Date.now()}`);
-    const rows = parseCSV(response.data);
-
-    let userFound = null;
-    for (let i = 1; i < rows.length; i++) {
-      const row = rows[i];
-      if (row.length >= 2) {
-        const csvMTB = row[0].replace(/^"/, '').replace(/"$/, '').trim().toUpperCase();
-        const csvMK = row[1].replace(/^"/, '').replace(/"$/, '').trim();
-
-        if (csvMTB === mtb.toUpperCase() && csvMK === mk) {
-          userFound = {
-            mtb: csvMTB,
-            token: row[2] ? row[2].replace(/^"/, '').replace(/"$/, '').trim() : '',
-            chatId: row[3] ? row[3].replace(/^"/, '').replace(/"$/, '').trim() : '',
-            maxGb: (row[4] && !isNaN(parseFloat(row[4]))) ? parseFloat(row[4].trim()) : 100
-          };
-          break;
-        }
-      }
-    }
-
-    if (userFound) {
-      return res.json({ success: true, user: userFound });
-    } else {
-      return res.status(401).json({ success: false, message: "Sai Mã thiết bị hoặc Mật khẩu!" });
-    }
-  } catch (error) {
-    console.error("Lỗi xác thực:", error.message);
-    return res.status(500).json({ success: false, message: "Lỗi kết nối máy chủ dữ liệu!" });
+    const response = await fetch(AUTH_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(req.body)
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Lỗi kết nối Server Xác Thực" });
   }
 });
 
-// 2. API Proxy đọc danh sách Bản sao lưu từ Apps Script
-app.get('/api/backups', async (req, res) => {
-  const { mtb } = req.query;
-  if (!mtb) return res.status(400).json({ error: "Thiếu tham số MTB" });
-
+// 2. API Khôi Phục Dữ Liệu
+app.get('/api/backup', async (req, res) => {
   try {
-    const response = await axios.get(`${BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(mtb)}&t=${Date.now()}`);
-    res.json(response.data);
-  } catch (error) {
+    const { mtb } = req.query;
+    const response = await fetch(`${BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(mtb)}&t=${Date.now()}`);
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
     res.status(500).json({ error: "Lỗi lấy bản sao lưu" });
   }
 });
 
-// 3. API Proxy ghi Bản sao lưu lên Apps Script
-app.post('/api/backups', async (req, res) => {
+// 3. API Upload File/Chunk lên Telegram (Giấu kín Bot Token)
+app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   try {
-    await axios.post(BACKUP_SCRIPT_URL, req.body, {
-      headers: { 'Content-Type': 'application/json' }
-    });
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: "Lỗi ghi bản sao lưu" });
-  }
-});
+    const { token, chatId } = req.body;
+    const file = req.file;
 
-// 4. API Proxy tải file mảnh từ Telegram
-app.get('/api/telegram-proxy', async (req, res) => {
-  const { token, file_id } = req.query;
-  if (!token || !file_id) return res.status(400).send("Thiếu thông tin file_id hoặc token!");
-
-  try {
-    // Bước a: Lấy file_path từ Telegram API
-    const fileRes = await axios.get(`https://api.telegram.org/bot${token}/getFile?file_id=${file_id}`);
-    if (!fileRes.data.ok || !fileRes.data.result.file_path) {
-      return res.status(404).send("Không lấy được thông tin file từ Telegram");
+    if (!token || !chatId || !file) {
+      return res.status(400).json({ success: false, message: "Thiếu dữ liệu" });
     }
 
-    const filePath = fileRes.data.result.file_path;
-    const directUrl = `https://api.telegram.org/file/bot${token}/${filePath}`;
+    const formData = new FormData();
+    formData.append('chat_id', chatId);
+    formData.append('document', file.buffer, file.originalname);
 
-    // Bước b: Stream dữ liệu file trực tiếp về client
-    const streamRes = await axios({
-      method: 'get',
-      url: directUrl,
-      responseType: 'stream'
+    const tgRes = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+      method: 'POST',
+      body: formData
     });
 
-    res.setHeader('Content-Type', streamRes.headers['content-type'] || 'application/octet-stream');
-    streamRes.data.pipe(res);
-  } catch (error) {
-    console.error("Telegram Proxy Error:", error.message);
-    res.status(500).send("Lỗi tải tệp qua Proxy");
+    const tgData = await tgRes.json();
+    if (tgData.ok) {
+      res.json({ success: true, file_id: tgData.result.document.file_id });
+    } else {
+      res.status(400).json({ success: false, message: tgData.description });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// Phục vụ SPA Route
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+// 4. API Tải File từ Telegram về Frontend (Giải quyết triệt để CORS)
+app.get('/api/file-proxy', async (req, res) => {
+  try {
+    const { token, fileId } = req.query;
+    
+    // Bước 1: Lấy file_path từ Telegram
+    const infoRes = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`);
+    const infoData = await infoRes.json();
+
+    if (!infoData.ok) return res.status(400).send("Không tìm thấy file");
+
+    // Bước 2: Tải luồng dữ liệu file trả về thẳng cho Trình Duyệt
+    const fileUrl = `https://api.telegram.org/file/bot${token}/${infoData.result.file_path}`;
+    const fileStream = await fetch(fileUrl);
+    
+    fileStream.body.pipe(res);
+  } catch (err) {
+    res.status(500).send("Lỗi tải file");
+  }
+});
+
+// 5. API Lưu Sao Lưu Mới
+app.post('/api/save-backup', async (req, res) => {
+  try {
+    await fetch(BACKUP_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body)
+    });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server đang vận hành tại cổng ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
