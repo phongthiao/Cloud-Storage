@@ -12,7 +12,7 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Lấy thông tin nhạy cảm từ Environment Variables của Render
+// Lấy thông tin nhạy cảm từ Environment Variables trên Render
 const AUTH_API_URL = process.env.AUTH_API_URL;
 const BACKUP_SCRIPT_URL = process.env.BACKUP_SCRIPT_URL;
 
@@ -31,7 +31,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// 2. API Khôi Phục Dữ Liệu
+// 2. API Khôi Phục Dữ Liệu Sau Lưu
 app.get('/api/backup', async (req, res) => {
   try {
     const { mtb } = req.query;
@@ -43,7 +43,7 @@ app.get('/api/backup', async (req, res) => {
   }
 });
 
-// 3. API Upload File/Chunk lên Telegram (Giấu kín Bot Token)
+// 3. API Upload Chunk (Đã Mã Hóa Tên Thành .dat)
 app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   try {
     const { token, chatId } = req.body;
@@ -53,9 +53,12 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
       return res.status(400).json({ success: false, message: "Thiếu dữ liệu" });
     }
 
+    // Ép tên file thành dạng mã hóa .dat ẩn danh cho Telegram
+    const datFileName = `data_chunk_${Date.now()}_${Math.floor(Math.random() * 10000)}.dat`;
+
     const formData = new FormData();
     formData.append('chat_id', chatId);
-    formData.append('document', file.buffer, file.originalname);
+    formData.append('document', file.buffer, datFileName);
 
     const tgRes = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
       method: 'POST',
@@ -73,18 +76,18 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   }
 });
 
-// 4. API Tải File từ Telegram về Frontend (Giải quyết triệt để CORS)
+// 4. API Tải File từ Telegram về Trình Duyệt (Giải quyết CORS & Stream Data)
 app.get('/api/file-proxy', async (req, res) => {
   try {
     const { token, fileId } = req.query;
     
-    // Bước 1: Lấy file_path từ Telegram
+    // Lấy thông tin đường dẫn file từ Telegram API
     const infoRes = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`);
     const infoData = await infoRes.json();
 
     if (!infoData.ok) return res.status(400).send("Không tìm thấy file");
 
-    // Bước 2: Tải luồng dữ liệu file trả về thẳng cho Trình Duyệt
+    // Truyền luồng dữ liệu file về trực tiếp cho Client
     const fileUrl = `https://api.telegram.org/file/bot${token}/${infoData.result.file_path}`;
     const fileStream = await fetch(fileUrl);
     
@@ -109,4 +112,4 @@ app.post('/api/save-backup', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Server đang chạy tại cổng ${PORT}`));
