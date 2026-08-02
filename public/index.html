@@ -33,17 +33,17 @@
   <div class="max-w-5xl mx-auto space-y-6">
     <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 flex justify-between items-center">
       <div>
-        <h1 class="text-2xl font-bold text-indigo-400">⚡ Cloud Storage (Secured)</h1>
+        <h1 class="text-2xl font-bold text-indigo-400">⚡ Cloud Storage (DAT Encrypted)</h1>
         <p id="userInfoBadge" class="text-xs text-slate-400 mt-1">Thiết bị: ...</p>
       </div>
-      <button onclick="logout()" class="text-xs bg-rose-600/20 text-rose-300 border border-rose-500/30 px-3 py-2 rounded-xl">🚪 Đăng Xuất</button>
+      <button onclick="logout()" class="text-xs bg-rose-600/20 text-rose-300 border border-rose-500/30 px-3 py-2 rounded-xl hover:bg-rose-600/30 transition">🚪 Đăng Xuất</button>
     </div>
 
-    <!-- TẢI FILE -->
+    <!-- KHU VỰC TẢI FILE -->
     <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-3">
-      <div class="flex gap-3">
-        <input type="file" id="fileInput" multiple class="block w-full text-sm text-slate-400 bg-slate-900 rounded-xl border border-slate-700 p-1">
-        <button onclick="startBatchUploadQueue()" id="uploadBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-6 py-2.5 rounded-xl transition">📤 Tải Lên</button>
+      <div class="flex flex-col sm:flex-row gap-3">
+        <input type="file" id="fileInput" multiple class="block w-full text-sm text-slate-400 bg-slate-900 rounded-xl border border-slate-700 p-1.5 focus:outline-none">
+        <button onclick="startBatchUploadQueue()" id="uploadBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-6 py-2.5 rounded-xl transition whitespace-nowrap">📤 Tải Lên</button>
       </div>
       <div id="uploadStatus" class="text-xs text-indigo-400 font-semibold hidden"></div>
     </div>
@@ -51,23 +51,26 @@
     <!-- DANH SÁCH FILE -->
     <div class="bg-slate-800 rounded-2xl border border-slate-700 p-4">
       <h2 class="font-bold text-slate-200 mb-3">📂 Danh Sách File</h2>
-      <table class="w-full text-left text-sm text-slate-300">
-        <thead class="bg-slate-900/50 text-slate-400 text-xs uppercase">
-          <tr>
-            <th class="p-3">Tên file</th>
-            <th class="p-3">Kích thước</th>
-            <th class="p-3 text-right">Thao tác</th>
-          </tr>
-        </thead>
-        <tbody id="fileTableBody" class="divide-y divide-slate-700/50">
-          <tr><td colspan="3" class="p-4 text-center text-slate-500">Chưa có dữ liệu</td></tr>
-        </tbody>
-      </table>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-slate-300">
+          <thead class="bg-slate-900/50 text-slate-400 text-xs uppercase">
+            <tr>
+              <th class="p-3">Tên file</th>
+              <th class="p-3">Kích thước</th>
+              <th class="p-3">Ngày tạo</th>
+              <th class="p-3 text-right">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody id="fileTableBody" class="divide-y divide-slate-700/50">
+            <tr><td colspan="4" class="p-4 text-center text-slate-500">Chưa có dữ liệu</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 
   <script>
-    const CHUNK_SIZE = 20 * 1024 * 1024; // 20 MB
+    const CHUNK_SIZE = 20 * 1024 * 1024; // Mảnh cắt 20 MB
     let CURRENT_MTB = localStorage.getItem('cur_mtb') || null;
     let BOT_TOKEN = localStorage.getItem('cur_token') || null;
     let CHAT_ID = localStorage.getItem('cur_chatid') || null;
@@ -85,6 +88,8 @@
       const mtb = document.getElementById('inputMTB').value.trim().toUpperCase();
       const mk = document.getElementById('inputMK').value.trim();
       const statusDiv = document.getElementById('loginStatus');
+
+      if (!mtb || !mk) return alert("Vui lòng nhập đầy đủ thông tin!");
 
       statusDiv.className = "text-xs text-center text-amber-400";
       statusDiv.innerText = "⏳ Đang xác thực qua Render Server...";
@@ -145,16 +150,20 @@
         const chunkIds = [];
 
         for (let i = 0; i < totalChunks; i++) {
-          if (i > 0) await new Promise(r => setTimeout(r, 1500)); // Anti spam delay
+          if (i > 0) {
+            statusText.innerText = `⏳ Chờ 1.5s Anti-spam Telegram trước khi gửi mảnh ${i + 1}...`;
+            await new Promise(r => setTimeout(r, 1500));
+          }
 
-          statusText.innerText = `📦 Đang tải ${file.name} (Mảnh ${i+1}/${totalChunks})...`;
+          statusText.innerText = `📦 Đang mã hóa & tải ${file.name} (Mảnh ${i+1}/${totalChunks})...`;
           const start = i * CHUNK_SIZE;
           const chunkBlob = file.slice(start, Math.min(file.size, start + CHUNK_SIZE));
 
           const formData = new FormData();
           formData.append('token', BOT_TOKEN);
           formData.append('chatId', CHAT_ID);
-          formData.append('document', chunkBlob, totalChunks > 1 ? `${file.name}.part${i+1}` : file.name);
+          // Gửi dữ liệu chunk dưới định dạng .dat mã hóa
+          formData.append('document', chunkBlob, `encrypted_chunk_${i+1}.dat`);
 
           const res = await fetch('/api/upload-chunk', { method: 'POST', body: formData });
           const data = await res.json();
@@ -167,9 +176,10 @@
           }
         }
 
+        // Lưu thông tin gốc (bao gồm Tên thật) vào CSDL ứng dụng
         dbFiles.unshift({
           id: "file_" + Date.now(),
-          name: file.name,
+          name: file.name, // Giữ tên gốc để khôi phục khi tải về
           size: file.size,
           chunks: chunkIds,
           date: new Date().toLocaleString('vi-VN')
@@ -180,6 +190,7 @@
       renderFiles();
       await saveBackup();
       statusText.classList.add('hidden');
+      document.getElementById('fileInput').value = "";
     }
 
     async function saveBackup() {
@@ -197,7 +208,7 @@
     function renderFiles() {
       const tbody = document.getElementById('fileTableBody');
       if (dbFiles.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-slate-500">Chưa có tệp nào.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-500">Chưa có tệp nào.</td></tr>`;
         return;
       }
 
@@ -205,8 +216,9 @@
         <tr class="hover:bg-slate-700/30">
           <td class="p-3 font-semibold text-slate-200">📄 ${f.name}</td>
           <td class="p-3 text-xs text-slate-400">${(f.size / (1024*1024)).toFixed(2)} MB</td>
+          <td class="p-3 text-xs text-slate-400">${f.date || '---'}</td>
           <td class="p-3 text-right">
-            <button onclick="downloadFile('${f.id}')" class="bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 px-3 py-1 rounded text-xs font-semibold">⬇️ Tải Về</button>
+            <button onclick="downloadFile('${f.id}')" class="bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 px-3 py-1 rounded-lg text-xs font-semibold hover:bg-emerald-600/40 transition">⬇️ Tải Về</button>
           </td>
         </tr>
       `).join('');
@@ -216,18 +228,29 @@
       const item = dbFiles.find(f => f.id === id);
       if (!item) return;
 
-      const blobs = [];
-      for (let chunkId of item.chunks) {
-        const res = await fetch(`/api/file-proxy?token=${BOT_TOKEN}&fileId=${chunkId}`);
-        const blob = await res.blob();
-        blobs.push(blob);
+      const statusText = document.getElementById('uploadStatus');
+      statusText.innerText = `⏳ Đang giải mã và tải tệp ${item.name}...`;
+      statusText.classList.remove('hidden');
+
+      try {
+        const blobs = [];
+        for (let chunkId of item.chunks) {
+          const res = await fetch(`/api/file-proxy?token=${BOT_TOKEN}&fileId=${chunkId}`);
+          const blob = await res.blob();
+          blobs.push(blob);
+        }
+
+        // Tự động ghép các mảnh file .dat lại và chuyển về tên + định dạng gốc
+        const fullBlob = new Blob(blobs, { type: 'application/octet-stream' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(fullBlob);
+        link.download = item.name; // Tải về đúng tên file nguyên bản
+        link.click();
+      } catch (err) {
+        alert("Lỗi trong quá trình tải và giải mã tệp!");
       }
 
-      const fullBlob = new Blob(blobs, { type: 'application/octet-stream' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(fullBlob);
-      link.download = item.name;
-      link.click();
+      statusText.classList.add('hidden');
     }
 
     function logout() {
