@@ -234,8 +234,7 @@
     const AUTH_API_URL = "/api/login";
     const BACKUP_SCRIPT_URL = "/api/backup";
 
-    // Đổi kích thước mảnh thành 10MB để tải mượt & tối ưu kết nối
-    const CHUNK_SIZE = 10 * 1024 * 1024; 
+    const CHUNK_SIZE = 20 * 1024 * 1024; 
 
     let CURRENT_MTB = localStorage.getItem('cur_mtb') || null;
     let BOT_TOKEN = localStorage.getItem('cur_token') || null;
@@ -448,67 +447,40 @@
       }
     }
 
-    // TẢI NÂNG CAO SONG SONG CHUNK - CHỐNG RATE-LIMIT
     async function uploadChunkedFile(file, statusText, progressBar, percentText) {
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-      const chunkFileIds = new Array(totalChunks);
+      const chunkFileIds = [];
       const fileIdUnique = "file_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
 
-      const CONCURRENCY_LIMIT = 2; // Luồng song song an toàn chống bị quét
-      let loadedBytesArray = new Array(totalChunks).fill(0);
-      let completedChunks = 0;
+      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+        if (isCancelled) return null;
+        while (isPaused && !isCancelled) await new Promise(r => setTimeout(r, 500));
+        if (isCancelled) return null;
 
-      const updateOverallProgress = () => {
-        const totalLoadedBytes = loadedBytesArray.reduce((acc, curr) => acc + curr, 0);
-        const overallPercent = Math.min(100, Math.round((totalLoadedBytes / file.size) * 100));
-        progressBar.style.width = overallPercent + '%';
-        percentText.innerText = overallPercent + '%';
-      };
-
-      const uploadChunkTask = async (chunkIndex) => {
-        if (isCancelled) return false;
+        if (chunkIndex > 0) {
+          statusText.innerText = `⏳ Đang chờ 1.5s trước khi gửi mảnh ${chunkIndex + 1}...`;
+          await new Promise(r => setTimeout(r, 1500));
+        }
 
         const start = chunkIndex * CHUNK_SIZE;
         const end = Math.min(file.size, start + CHUNK_SIZE);
         const chunkBlob = file.slice(start, end);
 
-        statusText.innerText = `📦 ${file.name} (Đang tải mảnh ${chunkIndex + 1}/${totalChunks})`;
+        statusText.innerText = `📦 ${file.name} (Mảnh ${chunkIndex + 1}/${totalChunks})`;
 
         const fileId = await uploadSingleChunkXHR(chunkBlob, (percent) => {
-          loadedBytesArray[chunkIndex] = (chunkBlob.size * percent) / 100;
-          updateOverallProgress();
+          const overallPercent = Math.round(((start + (chunkBlob.size * (percent / 100))) / file.size) * 100);
+          progressBar.style.width = overallPercent + '%';
+          percentText.innerText = overallPercent + '%';
         });
 
         if (fileId) {
-          chunkFileIds[chunkIndex] = fileId;
-          completedChunks++;
-          return true;
+          chunkFileIds.push(fileId);
         } else {
-          return false;
+          alert(`❌ Lỗi khi tải lên phần ${chunkIndex + 1} của tệp ${file.name}`);
+          return null;
         }
-      };
-
-      const queue = Array.from({ length: totalChunks }, (_, i) => i);
-      const workers = Array(Math.min(CONCURRENCY_LIMIT, totalChunks)).fill(null).map(async () => {
-        while (queue.length > 0 && !isCancelled) {
-          while (isPaused && !isCancelled) await new Promise(r => setTimeout(r, 500));
-          if (isCancelled) break;
-
-          const chunkIndex = queue.shift();
-          const success = await uploadChunkTask(chunkIndex);
-          
-          if (!success && !isCancelled) {
-            alert(`❌ Lỗi khi tải lên phần ${chunkIndex + 1} của tệp ${file.name}`);
-            isCancelled = true;
-          }
-          // Delay an toàn 400ms giữa các mảnh để chống Rate-Limit Telegram
-          await new Promise(r => setTimeout(r, 400)); 
-        }
-      });
-
-      await Promise.all(workers);
-
-      if (isCancelled || completedChunks < totalChunks) return null;
+      }
 
       return {
         id: fileIdUnique,
@@ -528,30 +500,27 @@
         formData.append('chatId', CHAT_ID);
         formData.append('document', blob);
 
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/api/upload-chunk', true);
+        currentXHR = new XMLHttpRequest();
+        currentXHR.open('POST', '/api/upload-chunk', true);
 
-        xhr.upload.onprogress = (e) => {
+        currentXHR.upload.onprogress = (e) => {
           if (e.lengthComputable) {
             const percent = Math.round((e.loaded / e.total) * 100);
             onProgress(percent);
           }
         };
 
-        xhr.onload = function() {
-          if (xhr.status === 200) {
-            try {
-              const data = JSON.parse(xhr.responseText);
-              if (data.success) {
-                resolve(data.file_id);
-              } else resolve(null);
-            } catch(e) { resolve(null); }
+        currentXHR.onload = function() {
+          if (currentXHR.status === 200) {
+            const data = JSON.parse(currentXHR.responseText);
+            if (data.success) {
+              resolve(data.file_id);
+            } else resolve(null);
           } else resolve(null);
         };
 
-        xhr.onerror = () => resolve(null);
-        currentXHR = xhr;
-        xhr.send(formData);
+        currentXHR.onerror = () => resolve(null);
+        currentXHR.send(formData);
       });
     }
 
