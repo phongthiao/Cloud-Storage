@@ -12,7 +12,6 @@ app.use(cors());
 app.use(express.json({ limit: '100mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Đọc URL cấu hình bảo mật từ Biến môi trường trên Render
 const AUTH_API_URL = process.env.AUTH_API_URL || "https://script.google.com/macros/s/AKfycbw-RDeNdYzo7dMnmMRUV2jLkUSCmIN5Fk87suroVvo_bYjyyO05HEKXUcPyf_RLQ_A/exec";
 const BACKUP_SCRIPT_URL = process.env.BACKUP_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbyMkD7y_bCC4l27JZgn5bzmWpch_ZTH208YzapDTw6nMIC4CXD9lUJJ2ccq3wqcsmhLeA/exec";
 
@@ -43,7 +42,7 @@ app.get('/api/backup', async (req, res) => {
   }
 });
 
-// 3. API Upload Chunk (Đã Mã Hóa Ngụy Trang Đuôi Thành .dat)[cite: 5]
+// 3. API Upload Chunk[cite: 5]
 app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   try {
     const { token, chatId } = req.body;
@@ -53,9 +52,7 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
       return res.status(400).json({ success: false, message: "Thiếu thông tin tải lên" });
     }
 
-    // Ép đổi tên mảnh file thành định dạng .dat mã hóa khi tải lên Telegram
     const datFileName = `data_chunk_${Date.now()}_${Math.floor(Math.random() * 10000)}.dat`;
-
     const formData = new FormData();
     formData.append('chat_id', chatId);
     formData.append('document', file.buffer, datFileName);
@@ -76,7 +73,7 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   }
 });
 
-// 4. API Proxy Tải File / Ghép File từ Telegram (Đã sửa lỗi ép tải xuống, hỗ trợ hiển thị trực quan inline)
+// 4. API Proxy Tải File / Ghép File từ Telegram[cite: 5]
 app.get('/api/file-proxy', async (req, res) => {
   try {
     const { token, fileId, filename } = req.query;
@@ -90,32 +87,18 @@ app.get('/api/file-proxy', async (req, res) => {
     const fileUrl = `https://api.telegram.org/file/bot${token}/${infoData.result.file_path}`;
     const fileStream = await fetch(fileUrl);
 
-    // Xác định kiểu MIME dựa trên phần mở rộng file (nếu có tên file truyền vào)
     let contentType = 'application/octet-stream';
     if (filename) {
       const ext = path.extname(filename).toLowerCase();
       const mimeTypes = {
-        '.jpg': 'image/jpeg',
-        '.jpeg': 'image/jpeg',
-        '.png': 'image/png',
-        '.gif': 'image/gif',
-        '.webp': 'image/webp',
-        '.svg': 'image/svg+xml',
-        '.mp4': 'video/mp4',
-        '.webm': 'video/webm',
-        '.mp3': 'audio/mpeg',
-        '.wav': 'audio/wav',
-        '.pdf': 'application/pdf',
-        '.txt': 'text/plain; charset=utf-8',
-        '.html': 'text/html; charset=utf-8',
-        '.json': 'application/json; charset=utf-8'
+        '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif',
+        '.webp': 'image/webp', '.svg': 'image/svg+xml', '.mp4': 'video/mp4', '.webm': 'video/webm',
+        '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.pdf': 'application/pdf', '.txt': 'text/plain; charset=utf-8',
+        '.html': 'text/html; charset=utf-8', '.json': 'application/json; charset=utf-8'
       };
-      if (mimeTypes[ext]) {
-        contentType = mimeTypes[ext];
-      }
+      if (mimeTypes[ext]) contentType = mimeTypes[ext];
     }
 
-    // Thiết lập header cho phép hiển thị trực tiếp (inline) thay vì ép buộc tải về (attachment)
     res.setHeader('Content-Type', contentType);
     if (filename) {
       res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(filename)}"`);
