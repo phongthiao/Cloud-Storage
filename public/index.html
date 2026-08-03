@@ -324,7 +324,7 @@
       document.getElementById('warningModal').classList.add('hidden');
     }
 
-    // 🟢 TỰ ĐỘNG LẤY BẢN SAO LƯU 4 (MỚI NHẤT) KHI MỚI VÀO / REFRESH WEB
+    // 🟢 TỰ ĐỘNG NẠP BẢN SAO LƯU MỚI NHẤT TRÊN CÙNG KHI F5 HOẶC MỚI ĐĂNG NHẬP
     async function autoFetchLatestBackupOnStart() {
       if (!CURRENT_MTB) return;
       try {
@@ -332,8 +332,7 @@
         const listData = await res.json();
 
         if (listData && listData.length > 0) {
-          // Backend trả về danh sách [BACKUP_4, BACKUP_3, BACKUP_2, BACKUP_1]
-          // Phần tử đầu tiên (listData[0]) chính là BACKUP_4
+          // Backend đã sắp xếp sẵn: listData[0] luôn là bản ghi mới nhất theo thời gian
           const latestItem = listData[0];
           const fullJsonData = latestItem.mainData || latestItem.backupData;
           
@@ -924,7 +923,7 @@
       }
     }
 
-    // 🟢 HIỂN THỊ MODAL DANH SÁCH BẢN SAO LƯU THEO THỨ TỰ 4 -> 3 -> 2 -> 1
+    // 🟢 MODAL HIỂN THỊ CÁC BẢN LƯU VỚI BẢN MỚI NHẤT TRÊN CÙNG
     async function openBackupHistoryModal() {
       const modal = document.getElementById('backupModal');
       const container = document.getElementById('backupListContainer');
@@ -940,20 +939,20 @@
           return;
         }
 
-        // Backend trả về danh sách theo thứ tự [BACKUP_4, BACKUP_3, BACKUP_2, BACKUP_1]
+        // Backend đã tự động sắp xếp theo thời gian mới nhất (Mới nhất nằm tại index 0)
         container.innerHTML = listData.map((item, index) => {
           const fullJsonData = item.mainData || item.backupData;
           const encodedData = encodeURIComponent(fullJsonData);
-          const isFirst = index === 0; // Vị trí đầu tiên chính là BACKUP_4
+          const isFirst = index === 0;
           
           return `
             <div class="bg-slate-900 border ${isFirst ? 'border-emerald-500/80 shadow-lg shadow-emerald-500/10' : 'border-purple-500/30'} p-3.5 rounded-xl space-y-2.5 relative">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
                   <div class="text-xs font-bold ${isFirst ? 'text-emerald-400' : 'text-slate-100'}">
-                    🕒 ${item.time}
+                    🕒 ${item.timeStr || item.time}
                   </div>
-                  ${isFirst ? '<span class="bg-emerald-500/20 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full font-bold border border-emerald-500/40 animate-pulse">🌟 MỚI NHẤT (BACKUP_4)</span>' : ''}
+                  ${isFirst ? '<span class="bg-emerald-500/20 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full font-bold border border-emerald-500/40 animate-pulse">🌟 MỚI NHẤT</span>' : ''}
                 </div>
                 <span class="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded border border-purple-500/30">
                   MTB: ${CURRENT_MTB}
