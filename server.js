@@ -34,6 +34,7 @@ let SYSTEM_CHAT_ID = process.env.CHAT_ID || "";
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Dọn dẹp file tạm tự động
 cron.schedule('*/30 * * * *', () => {
   console.log('[Cron Job] Đang kiểm tra dọn dẹp thư mục uploads...');
   fs.readdir(uploadDir, (err, files) => {
@@ -195,7 +196,7 @@ app.get('/api/file-proxy', async (req, res) => {
       res.setHeader('Content-Length', fileStream.headers.get('content-length'));
     }
 
-    res.setHeader('Content-Disposition', filename ? `inline; filename="${encodeURIComponent(filename)}"` : 'inline');
+    res.setHeader('Content-Disposition', filename ? `attachment; filename="${encodeURIComponent(filename)}"` : 'inline');
 
     pipeline(fileStream.body, res, (err) => {
       if (err && err.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
