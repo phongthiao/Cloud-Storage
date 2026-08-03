@@ -19,20 +19,20 @@
       
       <div class="space-y-3">
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Mã thiết bị (MTB):</label>
+          <label for="inputMTB" class="block text-xs font-semibold text-slate-300 mb-1">Mã thiết bị (MTB):</label>
           <input type="text" id="inputMTB" placeholder="Ví dụ: KH001" class="w-full bg-slate-900 border border-slate-700 text-sm px-4 py-2.5 rounded-xl outline-none focus:border-indigo-500 font-mono uppercase">
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Mật khẩu (MK):</label>
+          <label for="inputMK" class="block text-xs font-semibold text-slate-300 mb-1">Mật khẩu (MK):</label>
           <input type="password" id="inputMK" placeholder="Nhập mật khẩu..." class="w-full bg-slate-900 border border-slate-700 text-sm px-4 py-2.5 rounded-xl outline-none focus:border-indigo-500">
         </div>
       </div>
       
-      <button onclick="loginWithCloud()" id="loginBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-xl transition shadow-lg shadow-indigo-600/30 flex justify-center items-center gap-2">
+      <button id="loginBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-xl transition shadow-lg shadow-indigo-600/30 flex justify-center items-center gap-2">
         <span>🔑 Xác Thực Đăng Nhập</span>
       </button>
 
-      <a href="https://zalo.me/0799457172" target="_blank" class="w-full bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 border border-cyan-500/30 font-semibold py-2.5 rounded-xl transition flex justify-center items-center gap-2 text-xs">
+      <a href="https://zalo.me/0799457172" target="_blank" rel="noopener noreferrer" class="w-full bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 border border-cyan-500/30 font-semibold py-2.5 rounded-xl transition flex justify-center items-center gap-2 text-xs">
         💬 Liên Hệ Quản Trị Viên
       </a>
 
@@ -59,7 +59,7 @@
         </ul>
       </div>
 
-      <button onclick="closeWarningModal()" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-amber-600/20 text-xs uppercase tracking-wider">
+      <button id="closeWarningBtn" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-amber-600/20 text-xs uppercase tracking-wider">
         Tôi Đã Đọc Và Đồng Ý Tuân Thủ
       </button>
     </div>
@@ -79,11 +79,11 @@
         <div class="flex flex-wrap items-center gap-2">
           <span id="userInfoBadge" class="text-xs bg-indigo-500/20 text-indigo-300 px-3 py-2 rounded-xl border border-indigo-500/30 font-mono">Thiết bị: ...</span>
 
-          <button onclick="openBackupHistoryModal()" class="text-xs bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 px-3 py-2 rounded-xl transition font-semibold flex items-center gap-1">
-            📜 Danh Sách Sao Lưu (1-4)
+          <button id="openBackupBtn" class="text-xs bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 px-3 py-2 rounded-xl transition font-semibold flex items-center gap-1">
+            📜 Bản Sao Lưu Mới Nhất
           </button>
 
-          <button onclick="logout()" class="text-xs bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 px-3 py-2 rounded-xl transition">
+          <button id="logoutBtn" class="text-xs bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 px-3 py-2 rounded-xl transition">
             🚪 Đăng Xuất
           </button>
         </div>
@@ -104,13 +104,11 @@
     <!-- Khung Upload & Tạo Thư Mục -->
     <div class="bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-700 space-y-4">
       <div class="flex flex-col md:flex-row gap-3">
-        <button onclick="createNewFolder()" class="bg-amber-600 hover:bg-amber-500 text-white font-semibold px-4 py-2.5 rounded-xl transition shadow-lg shadow-amber-600/20 whitespace-nowrap flex items-center justify-center gap-2 text-sm">
+        <button id="createFolderBtn" class="bg-amber-600 hover:bg-amber-500 text-white font-semibold px-4 py-2.5 rounded-xl transition shadow-lg shadow-amber-600/20 whitespace-nowrap flex items-center justify-center gap-2 text-sm">
           ➕ Tạo Thư Mục
         </button>
 
-        <input type="file" id="fileInput" multiple class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 bg-slate-900 rounded-xl border border-slate-700 p-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" onchange="startBatchUploadQueue()">
-
-        <button id="uploadBtn" class="hidden"></button>
+        <input type="file" id="fileInput" multiple class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 bg-slate-900 rounded-xl border border-slate-700 p-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
       </div>
 
       <!-- KHUNG TIẾN TRÌNH TẢI FILE -->
@@ -119,7 +117,7 @@
           <div class="text-xs font-bold text-indigo-400 flex items-center gap-2">
             ⏳ Tiến Trình Tải Lên / Tải Xuống
           </div>
-          <button onclick="closeProgressWidget()" class="text-slate-400 hover:text-white text-base font-bold">&times;</button>
+          <button id="closeProgressBtn" class="text-slate-400 hover:text-white text-base font-bold">&times;</button>
         </div>
 
         <div class="space-y-1">
@@ -139,10 +137,10 @@
         <div class="flex items-center justify-between pt-1">
           <span id="queueCountText" class="text-[11px] text-slate-400">Đang xử lý: 0/0</span>
           <div class="flex gap-2">
-            <button id="pauseBtn" onclick="togglePauseUpload()" class="bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 border border-amber-500/30 text-xs px-3 py-1 rounded-lg transition font-semibold">
+            <button id="pauseBtn" class="bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 border border-amber-500/30 text-xs px-3 py-1 rounded-lg transition font-semibold">
               ⏸️ Tạm Dừng
             </button>
-            <button onclick="cancelUpload()" class="bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 text-xs px-3 py-1 rounded-lg transition font-semibold">
+            <button id="cancelBtn" class="bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 text-xs px-3 py-1 rounded-lg transition font-semibold">
               🛑 Hủy Bỏ
             </button>
           </div>
@@ -160,16 +158,16 @@
             📂 Danh Sách Nội Dung 
             <span id="fileCountBadge" class="text-xs bg-slate-700 text-indigo-300 px-2 py-0.5 rounded-full">0</span>
           </h2>
-          <button onclick="downloadSelectedItems()" class="bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 text-xs px-3 py-1.5 rounded-xl font-semibold transition hidden" id="downloadSelectedBtn">
+          <button id="downloadSelectedBtn" class="bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 text-xs px-3 py-1.5 rounded-xl font-semibold transition hidden">
             📥 Tải Các Mục Đã Chọn
           </button>
-          <button onclick="deleteSelectedItems()" class="bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 text-xs px-3 py-1.5 rounded-xl font-semibold transition hidden" id="deleteSelectedBtn">
+          <button id="deleteSelectedBtn" class="bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 text-xs px-3 py-1.5 rounded-xl font-semibold transition hidden">
             🗑️ Xóa Các Mục Đã Chọn
           </button>
         </div>
 
         <div class="flex items-center gap-2 w-full md:w-auto">
-          <input type="text" id="searchInput" oninput="filterFiles()" placeholder="🔍 Tìm tên tệp..." class="bg-slate-900 border border-slate-700 text-xs px-3 py-2 rounded-xl outline-none focus:border-indigo-500 w-full sm:w-64">
+          <input type="text" id="searchInput" placeholder="🔍 Tìm tên tệp..." class="bg-slate-900 border border-slate-700 text-xs px-3 py-2 rounded-xl outline-none focus:border-indigo-500 w-full sm:w-64">
         </div>
       </div>
 
@@ -177,7 +175,7 @@
         <table class="w-full text-left text-sm text-slate-300">
           <thead class="bg-slate-900/50 text-slate-400 border-b border-slate-700 text-xs uppercase">
             <tr>
-              <th class="p-4 w-10"><input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)" class="rounded bg-slate-900 border-slate-700 text-indigo-600"></th>
+              <th class="p-4 w-10"><input type="checkbox" id="selectAllCheckbox" class="rounded bg-slate-900 border-slate-700 text-indigo-600"></th>
               <th class="p-4">Tên tệp / thư mục</th>
               <th class="p-4">Dung lượng</th>
               <th class="p-4">Ngày cập nhật</th>
@@ -197,7 +195,7 @@
     <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-4xl w-full p-6 space-y-4 shadow-2xl relative flex flex-col max-h-[90vh]">
       <div class="flex justify-between items-center border-b border-slate-700 pb-3">
         <h3 id="previewTitle" class="text-sm font-bold text-indigo-400 truncate max-w-xl">👁️ Xem File</h3>
-        <button onclick="closePreviewModal()" class="text-slate-400 hover:text-white text-2xl font-bold">&times;</button>
+        <button id="closePreviewBtn" class="text-slate-400 hover:text-white text-2xl font-bold">&times;</button>
       </div>
 
       <div id="previewContent" class="flex-1 flex items-center justify-center overflow-auto bg-slate-900/80 rounded-xl p-4 min-h-[250px]">
@@ -208,7 +206,7 @@
         <button id="previewDownloadBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-2 rounded-xl font-semibold flex items-center gap-1">
           ⬇️ Tải File Xuống
         </button>
-        <button onclick="closePreviewModal()" class="bg-slate-700 hover:bg-slate-600 text-xs text-white px-4 py-2 rounded-xl">Đóng</button>
+        <button id="closePreviewFooterBtn" class="bg-slate-700 hover:bg-slate-600 text-xs text-white px-4 py-2 rounded-xl">Đóng</button>
       </div>
     </div>
   </div>
@@ -218,832 +216,920 @@
     <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-700 pb-3">
         <h3 class="text-lg font-bold text-purple-400 flex items-center gap-2">
-          📜 Danh Sách Bản Sao Lưu (1 đến 4)
+          📜 Các Bản Sao Lưu Mới Nhất
         </h3>
-        <button onclick="closeBackupModal()" class="text-slate-400 hover:text-white text-xl">&times;</button>
+        <button id="closeBackupBtn" class="text-slate-400 hover:text-white text-xl">&times;</button>
       </div>
       <div id="backupListContainer" class="space-y-3 max-h-80 overflow-y-auto pr-1">
-        <div class="text-center py-6 text-slate-400 text-xs">Đang tải danh sách...</div>
+        <div class="text-center py-6 text-slate-400 text-xs">Đang kiểm tra các bản lưu gần nhất...</div>
       </div>
       <div class="flex justify-end pt-2">
-        <button onclick="closeBackupModal()" class="bg-slate-700 hover:bg-slate-600 text-xs text-white px-4 py-2 rounded-xl">Đóng</button>
+        <button id="closeBackupFooterBtn" class="bg-slate-700 hover:bg-slate-600 text-xs text-white px-4 py-2 rounded-xl">Đóng</button>
       </div>
     </div>
   </div>
 
   <script>
-    const AUTH_API_URL = "/api/login";
-    const BACKUP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw0EdS-qSOA2PpemKa2sdZ4QghxdikvXreCvuWwAfK_Q-nIGDg-9No0qLHfiLb3kyWFbQ/exec";
+    (() => {
+      'use strict';
 
-    const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB
-    const MAX_CACHE_SIZE = 5;
-
-    let CURRENT_MTB = localStorage.getItem('cur_mtb') || null;
-    let BOT_TOKEN = localStorage.getItem('cur_token') || null;
-    let CHAT_ID = localStorage.getItem('cur_chatid') || null;
-    let MAX_STORAGE_GB = localStorage.getItem('cur_max_gb') ? parseFloat(localStorage.getItem('cur_max_gb')) : null;
-    let PINNED_MSG_ID = localStorage.getItem('cur_msg_id') || null;
-
-    let dbFiles = [];
-    let currentFolderId = null;
-
-    let isUploading = false;
-    let isPaused = false;
-    let isCancelled = false;
-    let currentXHR = null;
-
-    const previewCache = new Map();
-
-    window.onload = async () => {
-      if (CURRENT_MTB && BOT_TOKEN && CHAT_ID) {
-        document.getElementById('loginScreen').classList.add('hidden');
-        document.getElementById('userInfoBadge').innerText = `Thiết bị: ${CURRENT_MTB}`;
-        await autoFetchLatestBackupOnStart();
-      }
-    };
-
-    async function loginWithCloud() {
-      const mtb = document.getElementById('inputMTB').value.trim().toUpperCase();
-      const mk = document.getElementById('inputMK').value.trim();
-      const statusDiv = document.getElementById('loginStatus');
-      const loginBtn = document.getElementById('loginBtn');
-
-      if (!mtb || !mk) return alert("Vui lòng nhập đầy đủ Mã Thiết Bị và Mật Khẩu!");
-
-      statusDiv.className = "text-xs text-center font-medium text-amber-400";
-      statusDiv.innerText = "⏳ Đang xác thực thông tin...";
-      statusDiv.classList.remove('hidden');
-      loginBtn.disabled = true;
-
-      try {
-        const response = await fetch(AUTH_API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mtb: mtb, mk: mk })
-        });
-        
-        const resData = await response.json();
-
-        if (resData.success) {
-          CURRENT_MTB = mtb;
-          BOT_TOKEN = resData.token;
-          CHAT_ID = resData.chatId;
-          MAX_STORAGE_GB = resData.maxGb || null;
-
-          localStorage.setItem('cur_mtb', CURRENT_MTB);
-          localStorage.setItem('cur_token', BOT_TOKEN);
-          localStorage.setItem('cur_chatid', CHAT_ID);
-          if (MAX_STORAGE_GB !== null) {
-            localStorage.setItem('cur_max_gb', MAX_STORAGE_GB);
-          }
-
-          statusDiv.className = "text-xs text-center font-medium text-emerald-400";
-          statusDiv.innerText = "✅ Đăng nhập thành công!";
-
-          setTimeout(async () => {
-            document.getElementById('loginScreen').classList.add('hidden');
-            document.getElementById('userInfoBadge').innerText = `Thiết bị: ${CURRENT_MTB}`;
-            document.getElementById('warningModal').classList.remove('hidden');
-            await autoFetchLatestBackupOnStart();
-          }, 500);
-
-        } else {
-          statusDiv.className = "text-xs text-center font-medium text-rose-400";
-          statusDiv.innerText = "❌ " + (resData.message || "Sai Mã thiết bị hoặc Mật khẩu!");
-        }
-      } catch (err) {
-        console.error("Lỗi xác thực:", err);
-        statusDiv.className = "text-xs text-center font-medium text-rose-400";
-        statusDiv.innerText = "❌ Lỗi kết nối hệ thống!";
-      } finally {
-        loginBtn.disabled = false;
-      }
-    }
-
-    function closeWarningModal() {
-      document.getElementById('warningModal').classList.add('hidden');
-    }
-
-    // Khi F5 hoặc vào trang, luôn tự động nạp bản BACKUP_1 (mới nhất)
-    async function autoFetchLatestBackupOnStart() {
-      if (!CURRENT_MTB) return;
-      try {
-        const res = await fetch(`${BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(CURRENT_MTB)}&t=${Date.now()}`);
-        const listData = await res.json();
-
-        if (listData && listData.length > 0) {
-          const latestItem = listData[0]; // BACKUP_1 luôn ở phần tử đầu tiên
-          const fullJsonData = latestItem.mainData || latestItem.backupData;
-          
-          if (fullJsonData) {
-            dbFiles = typeof fullJsonData === 'string' ? JSON.parse(fullJsonData) : fullJsonData;
-          }
-        } else {
-          dbFiles = [];
-        }
-      } catch (e) {
-        console.error("Lỗi đọc dữ liệu cá nhân:", e);
-      } finally {
-        renderBreadcrumb();
-        renderFiles(getCurrentFolderItems());
-        updateStorageUsage();
-      }
-    }
-
-    async function autoTriggerAllBackups() {
-      await Promise.all([
-        autoSaveMainDatabase(),
-        autoExportBackupToCloud()
-      ]);
-    }
-
-    async function autoSaveMainDatabase() {
-      if (!BOT_TOKEN || !CHAT_ID) return;
-      try {
-        const res = await fetch('/api/pin-db', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            token: BOT_TOKEN, 
-            chatId: CHAT_ID, 
-            mtb: CURRENT_MTB, 
-            dbData: dbFiles,
-            msgId: PINNED_MSG_ID 
-          })
-        });
-        const data = await res.json();
-        if (data.success && data.msgId) {
-          PINNED_MSG_ID = data.msgId;
-          localStorage.setItem('cur_msg_id', PINNED_MSG_ID);
-        }
-      } catch (e) {}
-    }
-
-    async function autoExportBackupToCloud() {
-      if (!CURRENT_MTB) return;
-      const currentTimeStr = new Date().toLocaleString('vi-VN');
-      try {
-        await fetch(BACKUP_SCRIPT_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({
-            mtb: CURRENT_MTB,
-            time: currentTimeStr,
-            backupData: JSON.stringify(dbFiles)
-          })
-        });
-      } catch (err) {
-        console.error("Lỗi sao lưu lên Cloud Sheet:", err);
-      }
-    }
-
-    async function startBatchUploadQueue() {
-      const input = document.getElementById('fileInput');
-      const files = Array.from(input.files);
-
-      if (files.length === 0) return;
-
-      if (!MAX_STORAGE_GB) {
-        alert("❌ Chưa lấy được khai báo dung lượng hệ thống!");
-        return;
-      }
-
-      const totalNewBytes = files.reduce((sum, f) => sum + f.size, 0);
-      const currentUsedBytes = dbFiles.reduce((sum, item) => sum + (item.size || 0), 0);
-      const maxAllowedBytes = MAX_STORAGE_GB * 1024 * 1024 * 1024;
-
-      if (currentUsedBytes + totalNewBytes > maxAllowedBytes) {
-        const freeBytes = Math.max(0, maxAllowedBytes - currentUsedBytes);
-        alert(`❌ Dung lượng khả dụng không đủ!\n\n• Đã dùng: ${formatBytes(currentUsedBytes)} / ${MAX_STORAGE_GB} GB\n• Còn trống: ${formatBytes(freeBytes)}\n• Tổng tệp tải lên: ${formatBytes(totalNewBytes)}\n\nVui lòng xóa bớt tệp hoặc nâng hạn mức GB!`);
-        input.value = '';
-        return;
-      }
-
-      input.disabled = true;
-
-      const progressModal = document.getElementById('progressModal');
-      const progressBar = document.getElementById('progressBar');
-      const percentText = document.getElementById('percentText');
-      const statusText = document.getElementById('statusText');
-      const queueCountText = document.getElementById('queueCountText');
-
-      progressModal.classList.remove('hidden');
-
-      isUploading = true;
-      isPaused = false;
-      isCancelled = false;
-      document.getElementById('pauseBtn').innerText = "⏸️ Tạm Dừng";
-
-      let successCount = 0;
-
-      try {
-        for (let i = 0; i < files.length; i++) {
-          if (isCancelled) break;
-
-          const file = files[i];
-          queueCountText.innerText = `Đang xử lý file ${i + 1}/${files.length}`;
-          
-          const uploadedItem = await uploadChunkedFile(file, statusText, progressBar, percentText);
-          if (uploadedItem) {
-            dbFiles.unshift(uploadedItem);
-            renderFiles(getCurrentFolderItems());
-            updateStorageUsage();
-            successCount++;
-          }
-        }
-
-        if (successCount > 0) {
-          progressBar.style.width = '100%';
-          percentText.innerText = '100%';
-          await autoTriggerAllBackups();
-        }
-
-      } finally {
-        isUploading = false;
-        input.disabled = false;
-
-        if (isCancelled) {
-          statusText.innerText = "🛑 Đã hủy tiến trình tải lên.";
-        } else {
-          statusText.innerText = `🎉 Hoàn tất! Đã tải lên ${successCount}/${files.length} tệp.`;
-          input.value = '';
-          setTimeout(() => {
-            if (!isUploading) {
-              progressModal.classList.add('hidden');
-              progressBar.style.width = '0%';
-              percentText.innerText = '0%';
-            }
-          }, 2500);
-        }
-      }
-    }
-
-    async function uploadChunkedFile(file, statusText, progressBar, percentText) {
-      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-      const chunkFileIds = [];
-      const fileIdUnique = "file_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
-
-      const speedText = document.getElementById('speedText');
-      const etaText = document.getElementById('etaText');
-
-      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-        if (isCancelled) return null;
-        while (isPaused && !isCancelled) await new Promise(r => setTimeout(r, 300));
-        if (isCancelled) return null;
-
-        const start = chunkIndex * CHUNK_SIZE;
-        const end = Math.min(file.size, start + CHUNK_SIZE);
-        const chunkBlob = file.slice(start, end);
-
-        statusText.innerText = `📦 ${file.name} (Mảnh ${chunkIndex + 1}/${totalChunks} - 10MB)`;
-
-        let fileId = null;
-        let retries = 3;
-
-        while (retries > 0 && !fileId && !isCancelled) {
-          fileId = await uploadSingleChunkXHR(chunkBlob, (percent, speedMBs, etaSec) => {
-            let overallPercent = Math.round(((start + (chunkBlob.size * (percent / 100))) / file.size) * 100);
-            if (overallPercent > 100) overallPercent = 100;
-
-            progressBar.style.width = overallPercent + '%';
-            percentText.innerText = overallPercent + '%';
-            speedText.innerText = `Tốc độ: ${speedMBs} MB/s`;
-            etaText.innerText = `Còn lại: ${etaSec}s`;
-          });
-
-          if (!fileId) {
-            retries--;
-            if (retries > 0) {
-              statusText.innerText = `⚠️ Lỗi mạng / Tự động điều tiết tốc độ (Retry ${3 - retries}/3)...`;
-              await new Promise(r => setTimeout(r, 2000));
-            }
-          }
-        }
-
-        if (fileId) {
-          chunkFileIds.push(fileId);
-        } else {
-          alert(`❌ Tải lên thất bại ở phần ${chunkIndex + 1} của tệp ${file.name}`);
-          return null;
-        }
-      }
-
-      progressBar.style.width = '100%';
-      percentText.innerText = '100%';
-
-      return {
-        id: fileIdUnique,
-        name: file.name,
-        size: file.size,
-        chunks: chunkFileIds,
-        isFolder: false,
-        parentId: currentFolderId,
-        date: new Date().toLocaleString('vi-VN')
+      // CẤU HÌNH & HẰNG SỐ
+      const CONFIG = {
+        AUTH_API_URL: "/api/login",
+        BACKUP_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbw0EdS-qSOA2PpemKa2sdZ4QghxdikvXreCvuWwAfK_Q-nIGDg-9No0qLHfiLb3kyWFbQ/exec",
+        CHUNK_SIZE: 10 * 1024 * 1024, // 10MB
+        MAX_CACHE_SIZE: 5
       };
-    }
 
-    function uploadSingleChunkXHR(blob, onProgress) {
-      return new Promise((resolve) => {
-        const formData = new FormData();
-        formData.append('token', BOT_TOKEN);
-        formData.append('chatId', CHAT_ID);
-        formData.append('document', blob);
+      // QUẢN LÝ TRẠNG THÁI (STATE)
+      const state = {
+        mtb: localStorage.getItem('cur_mtb') || null,
+        token: localStorage.getItem('cur_token') || null,
+        chatId: localStorage.getItem('cur_chatid') || null,
+        maxStorageGb: localStorage.getItem('cur_max_gb') ? parseFloat(localStorage.getItem('cur_max_gb')) : null,
+        pinnedMsgId: localStorage.getItem('cur_msg_id') || null,
+        dbFiles: [],
+        currentFolderId: null,
+        isUploading: false,
+        isPaused: false,
+        isCancelled: false,
+        currentXHR: null,
+        activePreviewObjectUrl: null
+      };
 
-        currentXHR = new XMLHttpRequest();
-        currentXHR.open('POST', '/api/upload-chunk', true);
+      const previewCache = new Map();
 
-        let lastLoaded = 0;
-        let lastTime = Date.now();
+      // BẢO MẬT & HELPER UTILS
+      const escapeHtml = (text) => {
+        if (!text) return '';
+        return String(text)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      };
 
-        currentXHR.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            let percent = Math.round((e.loaded / e.total) * 100);
-            if (percent > 100) percent = 100;
-            
-            const now = Date.now();
-            const timeDiff = (now - lastTime) / 1000;
-            if (timeDiff >= 0.5 || e.loaded === e.total) {
-              const loadedDiff = e.loaded - lastLoaded;
-              const speed = timeDiff > 0 ? (loadedDiff / timeDiff) / (1024 * 1024) : 0;
-              const remainingBytes = e.total - e.loaded;
-              const eta = speed > 0 ? Math.round(remainingBytes / (speed * 1024 * 1024)) : 0;
+      const formatBytes = (bytes) => {
+        if (!bytes || bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+      };
 
-              onProgress(percent, speed.toFixed(2), eta);
-              lastLoaded = e.loaded;
-              lastTime = now;
-            }
-          }
-        };
-
-        currentXHR.onload = function() {
-          if (currentXHR.status === 200) {
-            try {
-              const data = JSON.parse(currentXHR.responseText);
-              if (data.success) {
-                onProgress(100, "0.00", 0);
-                resolve(data.file_id);
-              } else resolve(null);
-            } catch (e) {
-              resolve(null);
-            }
-          } else resolve(null);
-        };
-
-        currentXHR.onerror = () => resolve(null);
-        currentXHR.send(formData);
-      });
-    }
-
-    async function fetchFileBlobFromItem(item, onProgress) {
-      const chunkIds = item.chunks || [item.id];
-      let loadedCount = 0;
-
-      const downloadPromises = chunkIds.map(async (chunkId, index) => {
-        const proxiedUrl = `/api/file-proxy?token=${BOT_TOKEN}&fileId=${chunkId}&filename=${encodeURIComponent(item.name)}`;
-        const res = await fetch(proxiedUrl);
-        if (!res.ok) throw new Error(`Lỗi khi tải mảnh file ${index + 1}`);
-
-        const blob = await res.blob();
-        loadedCount++;
-        if (onProgress) onProgress(loadedCount, chunkIds.length);
-        return { index, blob };
+      // KHỞI TẠO NGUYÊN THỂ (DOM READY)
+      window.addEventListener('DOMContentLoaded', async () => {
+        bindEvents();
+        if (state.mtb && state.token && state.chatId) {
+          document.getElementById('loginScreen').classList.add('hidden');
+          document.getElementById('userInfoBadge').innerText = `Thiết bị: ${state.mtb}`;
+          await autoFetchLatestBackupOnStart();
+        }
       });
 
-      const results = await Promise.all(downloadPromises);
+      // GÁN SỰ KIỆN TẬP TRUNG (EVENT LISTENERS)
+      function bindEvents() {
+        document.getElementById('loginBtn').addEventListener('click', loginWithCloud);
+        document.getElementById('closeWarningBtn').addEventListener('click', () => {
+          document.getElementById('warningModal').classList.add('hidden');
+        });
+        document.getElementById('logoutBtn').addEventListener('click', logout);
+        document.getElementById('fileInput').addEventListener('change', startBatchUploadQueue);
+        document.getElementById('createFolderBtn').addEventListener('click', createNewFolder);
+        document.getElementById('pauseBtn').addEventListener('click', togglePauseUpload);
+        document.getElementById('cancelBtn').addEventListener('click', cancelUpload);
+        document.getElementById('closeProgressBtn').addEventListener('click', closeProgressWidget);
+        document.getElementById('searchInput').addEventListener('input', filterFiles);
+        document.getElementById('selectAllCheckbox').addEventListener('change', (e) => toggleSelectAll(e.target));
+        document.getElementById('downloadSelectedBtn').addEventListener('click', downloadSelectedItems);
+        document.getElementById('deleteSelectedBtn').addEventListener('click', deleteSelectedItems);
+        
+        document.getElementById('closePreviewBtn').addEventListener('click', closePreviewModal);
+        document.getElementById('closePreviewFooterBtn').addEventListener('click', closePreviewModal);
+        
+        document.getElementById('openBackupBtn').addEventListener('click', openBackupHistoryModal);
+        document.getElementById('closeBackupBtn').addEventListener('click', closeBackupModal);
+        document.getElementById('closeBackupFooterBtn').addEventListener('click', closeBackupModal);
+      }
 
-      results.sort((a, b) => a.index - b.index);
-      const blobs = results.map(r => r.blob);
+      // XÁC THỰC
+      async function loginWithCloud() {
+        const mtb = document.getElementById('inputMTB').value.trim().toUpperCase();
+        const mk = document.getElementById('inputMK').value.trim();
+        const statusDiv = document.getElementById('loginStatus');
+        const loginBtn = document.getElementById('loginBtn');
 
-      return new Blob(blobs, { type: 'application/octet-stream' });
-    }
+        if (!mtb || !mk) return alert("Vui lòng nhập đầy đủ Mã Thiết Bị và Mật Khẩu!");
 
-    async function downloadFileById(itemId) {
-      const item = dbFiles.find(f => f.id === itemId);
-      if (!item) return alert("❌ Không tìm thấy thông tin tệp!");
+        statusDiv.className = "text-xs text-center font-medium text-amber-400";
+        statusDiv.innerText = "⏳ Đang xác thực thông tin...";
+        statusDiv.classList.remove('hidden');
+        loginBtn.disabled = true;
 
-      const progressModal = document.getElementById('progressModal');
-      const progressBar = document.getElementById('progressBar');
-      const percentText = document.getElementById('percentText');
-      const statusText = document.getElementById('statusText');
-      const queueCountText = document.getElementById('queueCountText');
-
-      progressModal.classList.remove('hidden');
-      queueCountText.innerText = "Đang tải các mảnh song song...";
-
-      try {
-        let fullBlob;
-        if (previewCache.has(itemId)) {
-          fullBlob = previewCache.get(itemId);
-        } else {
-          fullBlob = await fetchFileBlobFromItem(item, (current, total) => {
-            const percent = Math.round((current / total) * 100);
-            progressBar.style.width = percent + '%';
-            percentText.innerText = percent + '%';
-            statusText.innerText = `📥 Tải song song các mảnh (${current}/${total}): ${item.name}`;
+        try {
+          const response = await fetch(CONFIG.AUTH_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mtb, mk })
           });
+          
+          const resData = await response.json();
 
-          if (previewCache.size >= MAX_CACHE_SIZE) {
-            const oldestKey = previewCache.keys().next().value;
-            previewCache.delete(oldestKey);
+          if (resData.success) {
+            state.mtb = mtb;
+            state.token = resData.token;
+            state.chatId = resData.chatId;
+            state.maxStorageGb = resData.maxGb || null;
+
+            localStorage.setItem('cur_mtb', state.mtb);
+            localStorage.setItem('cur_token', state.token);
+            localStorage.setItem('cur_chatid', state.chatId);
+            if (state.maxStorageGb !== null) {
+              localStorage.setItem('cur_max_gb', state.maxStorageGb);
+            }
+
+            statusDiv.className = "text-xs text-center font-medium text-emerald-400";
+            statusDiv.innerText = "✅ Đăng nhập thành công!";
+
+            setTimeout(async () => {
+              document.getElementById('loginScreen').classList.add('hidden');
+              document.getElementById('userInfoBadge').innerText = `Thiết bị: ${state.mtb}`;
+              document.getElementById('warningModal').classList.remove('hidden');
+              await autoFetchLatestBackupOnStart();
+            }, 500);
+
+          } else {
+            statusDiv.className = "text-xs text-center font-medium text-rose-400";
+            statusDiv.innerText = "❌ " + (resData.message || "Sai Mã thiết bị hoặc Mật khẩu!");
           }
-          previewCache.set(itemId, fullBlob);
+        } catch (err) {
+          console.error("Lỗi xác thực:", err);
+          statusDiv.className = "text-xs text-center font-medium text-rose-400";
+          statusDiv.innerText = "❌ Lỗi kết nối hệ thống!";
+        } finally {
+          loginBtn.disabled = false;
+        }
+      }
+
+      function logout() {
+        localStorage.clear();
+        location.reload();
+      }
+
+      // ĐỒNG BỘ DỮ LIỆU CSDL & BACKUP
+      async function autoFetchLatestBackupOnStart() {
+        if (!state.mtb) return;
+        try {
+          const res = await fetch(`${CONFIG.BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(state.mtb)}&t=${Date.now()}`);
+          const listData = await res.json();
+
+          if (Array.isArray(listData) && listData.length > 0) {
+            const latestItem = listData[listData.length - 1];
+            const fullJsonData = latestItem.mainData || latestItem.backupData;
+            
+            if (fullJsonData) {
+              state.dbFiles = typeof fullJsonData === 'string' ? JSON.parse(fullJsonData) : fullJsonData;
+            }
+          } else {
+            state.dbFiles = [];
+          }
+        } catch (e) {
+          console.error("Lỗi đọc dữ liệu cá nhân:", e);
+        } finally {
+          renderBreadcrumb();
+          renderFiles(getCurrentFolderItems());
+          updateStorageUsage();
+        }
+      }
+
+      async function autoTriggerAllBackups() {
+        await Promise.allSettled([
+          autoSaveMainDatabase(),
+          autoExportBackupToCloud()
+        ]);
+      }
+
+      async function autoSaveMainDatabase() {
+        if (!state.token || !state.chatId) return;
+        try {
+          const res = await fetch('/api/pin-db', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              token: state.token, 
+              chatId: state.chatId, 
+              mtb: state.mtb, 
+              dbData: state.dbFiles,
+              msgId: state.pinnedMsgId 
+            })
+          });
+          const data = await res.json();
+          if (data.success && data.msgId) {
+            state.pinnedMsgId = data.msgId;
+            localStorage.setItem('cur_msg_id', state.pinnedMsgId);
+          }
+        } catch (e) {
+          console.error("Lỗi ghim CSDL:", e);
+        }
+      }
+
+      async function autoExportBackupToCloud() {
+        if (!state.mtb) return;
+        const currentTimeStr = new Date().toLocaleString('vi-VN');
+        try {
+          await fetch(CONFIG.BACKUP_SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+              mtb: state.mtb,
+              time: currentTimeStr,
+              backupData: JSON.stringify(state.dbFiles)
+            })
+          });
+        } catch (err) {
+          console.error("Lỗi sao lưu lên Cloud Sheet:", err);
+        }
+      }
+
+      // QUẢN LÝ TIẾN TRÌNH UPLOAD
+      async function startBatchUploadQueue() {
+        const input = document.getElementById('fileInput');
+        const files = Array.from(input.files);
+
+        if (files.length === 0) return;
+
+        if (!state.maxStorageGb) {
+          alert("❌ Chưa lấy được khai báo dung lượng hệ thống!");
+          return;
+        }
+
+        const totalNewBytes = files.reduce((sum, f) => sum + f.size, 0);
+        const currentUsedBytes = state.dbFiles.reduce((sum, item) => sum + (item.size || 0), 0);
+        const maxAllowedBytes = state.maxStorageGb * 1024 * 1024 * 1024;
+
+        if (currentUsedBytes + totalNewBytes > maxAllowedBytes) {
+          const freeBytes = Math.max(0, maxAllowedBytes - currentUsedBytes);
+          alert(`❌ Dung lượng khả dụng không đủ!\n\n• Đã dùng: ${formatBytes(currentUsedBytes)} / ${state.maxStorageGb} GB\n• Còn trống: ${formatBytes(freeBytes)}\n• Tổng tệp tải lên: ${formatBytes(totalNewBytes)}\n\nVui lòng xóa bớt tệp hoặc nâng hạn mức GB!`);
+          input.value = '';
+          return;
+        }
+
+        input.disabled = true;
+
+        const progressModal = document.getElementById('progressModal');
+        const progressBar = document.getElementById('progressBar');
+        const percentText = document.getElementById('percentText');
+        const statusText = document.getElementById('statusText');
+        const queueCountText = document.getElementById('queueCountText');
+
+        progressModal.classList.remove('hidden');
+
+        state.isUploading = true;
+        state.isPaused = false;
+        state.isCancelled = false;
+        document.getElementById('pauseBtn').innerText = "⏸️ Tạm Dừng";
+
+        let successCount = 0;
+
+        try {
+          for (let i = 0; i < files.length; i++) {
+            if (state.isCancelled) break;
+
+            const file = files[i];
+            queueCountText.innerText = `Đang xử lý file ${i + 1}/${files.length}`;
+            
+            const uploadedItem = await uploadChunkedFile(file, statusText, progressBar, percentText);
+            if (uploadedItem) {
+              state.dbFiles.unshift(uploadedItem);
+              renderFiles(getCurrentFolderItems());
+              updateStorageUsage();
+              successCount++;
+            }
+          }
+
+          if (successCount > 0) {
+            progressBar.style.width = '100%';
+            percentText.innerText = '100%';
+            await autoTriggerAllBackups();
+          }
+
+        } finally {
+          state.isUploading = false;
+          input.disabled = false;
+
+          if (state.isCancelled) {
+            statusText.innerText = "🛑 Đã hủy tiến trình tải lên.";
+          } else {
+            statusText.innerText = `🎉 Hoàn tất! Đã tải lên ${successCount}/${files.length} tệp.`;
+            input.value = '';
+            setTimeout(() => {
+              if (!state.isUploading) {
+                progressModal.classList.add('hidden');
+                progressBar.style.width = '0%';
+                percentText.innerText = '0%';
+              }
+            }, 2500);
+          }
+        }
+      }
+
+      async function uploadChunkedFile(file, statusText, progressBar, percentText) {
+        const totalChunks = Math.ceil(file.size / CONFIG.CHUNK_SIZE);
+        const chunkFileIds = [];
+        const fileIdUnique = "file_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7);
+
+        const speedText = document.getElementById('speedText');
+        const etaText = document.getElementById('etaText');
+
+        for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+          if (state.isCancelled) return null;
+          while (state.isPaused && !state.isCancelled) await new Promise(r => setTimeout(r, 300));
+          if (state.isCancelled) return null;
+
+          const start = chunkIndex * CONFIG.CHUNK_SIZE;
+          const end = Math.min(file.size, start + CONFIG.CHUNK_SIZE);
+          const chunkBlob = file.slice(start, end);
+
+          statusText.innerText = `📦 ${file.name} (Mảnh ${chunkIndex + 1}/${totalChunks} - 10MB)`;
+
+          let fileId = null;
+          let retries = 3;
+
+          while (retries > 0 && !fileId && !state.isCancelled) {
+            fileId = await uploadSingleChunkXHR(chunkBlob, (percent, speedMBs, etaSec) => {
+              let overallPercent = Math.round(((start + (chunkBlob.size * (percent / 100))) / file.size) * 100);
+              if (overallPercent > 100) overallPercent = 100;
+
+              progressBar.style.width = overallPercent + '%';
+              percentText.innerText = overallPercent + '%';
+              speedText.innerText = `Tốc độ: ${speedMBs} MB/s`;
+              etaText.innerText = `Còn lại: ${etaSec}s`;
+            });
+
+            if (!fileId) {
+              retries--;
+              if (retries > 0) {
+                statusText.innerText = `⚠️ Lỗi mạng / Tự động điều tiết tốc độ (Retry ${3 - retries}/3)...`;
+                await new Promise(r => setTimeout(r, 2000));
+              }
+            }
+          }
+
+          if (fileId) {
+            chunkFileIds.push(fileId);
+          } else {
+            alert(`❌ Tải lên thất bại ở phần ${chunkIndex + 1} của tệp ${file.name}`);
+            return null;
+          }
         }
 
         progressBar.style.width = '100%';
         percentText.innerText = '100%';
-        statusText.innerText = "✅ Hoàn tất ghép file! Đang lưu xuống máy...";
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(fullBlob);
-        link.download = item.name;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
-      } catch (err) {
-        alert("❌ Lỗi trong quá trình kết nối và ghép file: " + err.message);
-      } finally {
-        setTimeout(() => {
-          progressModal.classList.add('hidden');
-          progressBar.style.width = '0%';
-          percentText.innerText = '0%';
-        }, 2000);
-      }
-    }
 
-    async function previewFile(itemId) {
-      const item = dbFiles.find(f => f.id === itemId);
-      if (!item) return;
-
-      const modal = document.getElementById('previewModal');
-      const title = document.getElementById('previewTitle');
-      const content = document.getElementById('previewContent');
-      const downloadBtn = document.getElementById('previewDownloadBtn');
-
-      title.innerText = `👁️ Đang xem: ${item.name}`;
-      downloadBtn.onclick = () => downloadFileById(itemId);
-      modal.classList.remove('hidden');
-
-      let fullBlob;
-      if (previewCache.has(itemId)) {
-        content.innerHTML = `<div class="text-emerald-400 text-xs font-semibold">⚡ Đã tải từ bộ nhớ đệm nhanh!</div>`;
-        fullBlob = previewCache.get(itemId);
-        await new Promise(r => setTimeout(r, 200));
-      } else {
-        content.innerHTML = `<div class="text-amber-400 text-xs font-semibold animate-pulse">⏳ Đang tải song song các phần của file...</div>`;
-        try {
-          fullBlob = await fetchFileBlobFromItem(item);
-
-          if (previewCache.size >= MAX_CACHE_SIZE) {
-            const oldestKey = previewCache.keys().next().value;
-            previewCache.delete(oldestKey);
-          }
-          previewCache.set(itemId, fullBlob);
-        } catch (err) {
-          content.innerHTML = `<div class="text-rose-400 text-xs font-semibold">❌ Không thể tải hoặc ghép nội dung xem trước!</div>`;
-          return;
-        }
+        return {
+          id: fileIdUnique,
+          name: file.name,
+          size: file.size,
+          chunks: chunkFileIds,
+          isFolder: false,
+          parentId: state.currentFolderId,
+          date: new Date().toLocaleString('vi-VN')
+        };
       }
 
-      try {
-        const url = URL.createObjectURL(fullBlob);
-        const ext = item.name.split('.').pop().toLowerCase();
+      function uploadSingleChunkXHR(blob, onProgress) {
+        return new Promise((resolve) => {
+          const formData = new FormData();
+          formData.append('token', state.token);
+          formData.append('chatId', state.chatId);
+          formData.append('document', blob);
 
-        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) {
-          content.innerHTML = `<img src="${url}" class="max-h-[70vh] max-w-full rounded-lg object-contain border border-slate-700 shadow-md" alt="${item.name}">`;
-        } else if (['mp4', 'webm', 'ogg', 'mov'].includes(ext)) {
-          content.innerHTML = `<video controls src="${url}" class="max-h-[70vh] max-w-full rounded-lg shadow-md"></video>`;
-        } else if (['mp3', 'wav', 'm4a'].includes(ext)) {
-          content.innerHTML = `<audio controls src="${url}" class="w-full max-w-md"></audio>`;
-        } else if (['txt', 'json', 'js', 'html', 'css', 'csv', 'md'].includes(ext)) {
-          const text = await fullBlob.text();
-          content.innerHTML = `<pre class="text-xs text-emerald-400 font-mono w-full max-h-[65vh] overflow-auto text-left whitespace-pre-wrap bg-slate-950 p-4 rounded-lg border border-slate-800">${escapeHtml(text)}</pre>`;
-        } else if (ext === 'pdf') {
-          content.innerHTML = `<iframe src="${url}" class="w-full h-[65vh] rounded-lg border border-slate-700"></iframe>`;
+          state.currentXHR = new XMLHttpRequest();
+          state.currentXHR.open('POST', '/api/upload-chunk', true);
+
+          let lastLoaded = 0;
+          let lastTime = Date.now();
+
+          state.currentXHR.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              let percent = Math.round((e.loaded / e.total) * 100);
+              if (percent > 100) percent = 100;
+              
+              const now = Date.now();
+              const timeDiff = (now - lastTime) / 1000;
+              if (timeDiff >= 0.5 || e.loaded === e.total) {
+                const loadedDiff = e.loaded - lastLoaded;
+                const speed = timeDiff > 0 ? (loadedDiff / timeDiff) / (1024 * 1024) : 0;
+                const remainingBytes = e.total - e.loaded;
+                const eta = speed > 0 ? Math.round(remainingBytes / (speed * 1024 * 1024)) : 0;
+
+                onProgress(percent, speed.toFixed(2), eta);
+                lastLoaded = e.loaded;
+                lastTime = now;
+              }
+            }
+          };
+
+          state.currentXHR.onload = function() {
+            if (state.currentXHR.status === 200) {
+              try {
+                const data = JSON.parse(state.currentXHR.responseText);
+                if (data.success) {
+                  onProgress(100, "0.00", 0);
+                  resolve(data.file_id);
+                } else resolve(null);
+              } catch (e) {
+                resolve(null);
+              }
+            } else resolve(null);
+          };
+
+          state.currentXHR.onerror = () => resolve(null);
+          state.currentXHR.send(formData);
+        });
+      }
+
+      function togglePauseUpload() {
+        if (!state.isUploading) return;
+        state.isPaused = !state.isPaused;
+        const pauseBtn = document.getElementById('pauseBtn');
+        const statusText = document.getElementById('statusText');
+
+        if (state.isPaused) {
+          pauseBtn.innerText = "▶️ Tiếp Tục";
+          statusText.innerText = "⏸️ Tiến trình tạm dừng...";
         } else {
-          content.innerHTML = `
-            <div class="text-center space-y-3 p-4">
-              <div class="text-4xl">📄</div>
-              <div class="text-xs text-slate-300">Định dạng <strong>.${ext}</strong> không hỗ trợ xem trực tiếp.</div>
-              <button onclick="downloadFileById('${itemId}')" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-2 rounded-xl font-semibold">
-                ⬇️ Tải Xuống Ngay
-              </button>
-            </div>`;
+          pauseBtn.innerText = "⏸️ Tạm Dừng";
         }
-      } catch (err) {
-        content.innerHTML = `<div class="text-rose-400 text-xs font-semibold">❌ Lỗi hiển thị nội dung xem trước!</div>`;
-      }
-    }
-
-    function closePreviewModal() {
-      document.getElementById('previewModal').classList.add('hidden');
-    }
-
-    async function downloadSelectedItems() {
-      const checkedBoxes = Array.from(document.querySelectorAll('.item-checkbox:checked'));
-      if (checkedBoxes.length === 0) return;
-
-      const items = checkedBoxes.map(cb => dbFiles.find(f => f.id === cb.value)).filter(f => f && !f.isFolder);
-      if (items.length === 0) return alert("⚠️ Vui lòng chọn tệp lẻ để tải xuống!");
-
-      const downloadBtn = document.getElementById('downloadSelectedBtn');
-      downloadBtn.disabled = true;
-
-      for (let i = 0; i < items.length; i++) {
-        await downloadFileById(items[i].id);
-        await new Promise(r => setTimeout(r, 1000));
       }
 
-      downloadBtn.disabled = false;
-    }
-
-    function togglePauseUpload() {
-      if (!isUploading) return;
-      isPaused = !isPaused;
-      const pauseBtn = document.getElementById('pauseBtn');
-      const statusText = document.getElementById('statusText');
-
-      if (isPaused) {
-        pauseBtn.innerText = "▶️ Tiếp Tục";
-        statusText.innerText = "⏸️ Tiến trình tạm dừng...";
-      } else {
-        pauseBtn.innerText = "⏸️ Tạm Dừng";
-      }
-    }
-
-    function cancelUpload() {
-      if (confirm("Bạn có chắc chắn muốn HỦY tiến trình tải lên?")) {
-        isCancelled = true;
-        isPaused = false;
-        if (currentXHR) currentXHR.abort();
-      }
-    }
-
-    function closeProgressWidget() {
-      if (isUploading && !confirm("Tiến trình đang chạy. Bạn có chắc muốn đóng?")) return;
-      document.getElementById('progressModal').classList.add('hidden');
-    }
-
-    async function deleteSelectedItems() {
-      const checkedBoxes = Array.from(document.querySelectorAll('.item-checkbox:checked'));
-      if (checkedBoxes.length === 0) return;
-
-      if (!confirm(`Bạn có chắc chắn muốn xóa ${checkedBoxes.length} mục đã chọn?`)) return;
-
-      const deleteBtn = document.getElementById('deleteSelectedBtn');
-      deleteBtn.disabled = true;
-
-      for (let i = 0; i < checkedBoxes.length; i++) {
-        const id = checkedBoxes[i].value;
-        dbFiles = dbFiles.filter(f => f.id !== id);
-        if (previewCache.has(id)) previewCache.delete(id);
+      function cancelUpload() {
+        if (confirm("Bạn có chắc chắn muốn HỦY tiến trình tải lên?")) {
+          state.isCancelled = true;
+          state.isPaused = false;
+          if (state.currentXHR) state.currentXHR.abort();
+        }
       }
 
-      renderFiles(getCurrentFolderItems());
-      updateStorageUsage();
-
-      await autoTriggerAllBackups();
-
-      deleteBtn.disabled = false;
-      document.getElementById('selectAllCheckbox').checked = false;
-      toggleSelectAll({ checked: false });
-      alert("✅ Đã xóa hoàn tất!");
-    }
-
-    async function deleteSingleItem(id) {
-      const item = dbFiles.find(f => f.id === id);
-      if (!item || !confirm(`Xóa vĩnh viễn "${item.name}"?`)) return;
-
-      dbFiles = dbFiles.filter(f => f.id !== id);
-      if (previewCache.has(id)) previewCache.delete(id);
-
-      renderFiles(getCurrentFolderItems());
-      updateStorageUsage();
-
-      await autoTriggerAllBackups();
-    }
-
-    async function createNewFolder() {
-      const folderName = prompt("Nhập tên thư mục mới:");
-      if (!folderName || !folderName.trim()) return;
-
-      dbFiles.unshift({
-        id: "folder_" + Date.now(),
-        name: folderName.trim(),
-        isFolder: true,
-        parentId: currentFolderId,
-        date: new Date().toLocaleString('vi-VN')
-      });
-
-      renderFiles(getCurrentFolderItems());
-      await autoTriggerAllBackups();
-    }
-
-    function getCurrentFolderItems() {
-      return dbFiles.filter(item => (item.parentId || null) === currentFolderId);
-    }
-
-    function openFolder(folderId) {
-      currentFolderId = folderId;
-      renderBreadcrumb();
-      renderFiles(getCurrentFolderItems());
-    }
-
-    function renderBreadcrumb() {
-      const breadcrumbBar = document.getElementById('breadcrumbBar');
-      let path = [{ id: null, name: "🏠 Trang Chủ" }];
-      let curr = currentFolderId;
-      let tempStack = [];
-
-      while (curr) {
-        const found = dbFiles.find(item => item.id === curr);
-        if (found) {
-          tempStack.unshift({ id: found.id, name: found.name });
-          curr = found.parentId;
-        } else break;
+      function closeProgressWidget() {
+        if (state.isUploading && !confirm("Tiến trình đang chạy. Bạn có chắc muốn đóng?")) return;
+        document.getElementById('progressModal').classList.add('hidden');
       }
 
-      path = path.concat(tempStack);
-      breadcrumbBar.innerHTML = path.map((node, index) => {
-        const isLast = index === path.length - 1;
-        return isLast 
-          ? `<span class="font-bold text-indigo-400 flex items-center gap-1">${node.name}</span>`
-          : `<button onclick="openFolder(${node.id ? `'${node.id}'` : 'null'})" class="hover:text-indigo-300 font-medium transition">${node.name}</button> <span class="text-slate-500">/</span>`;
-      }).join(' ');
-    }
+      // XỬ LÝ TẢI FILE VỀ & PREVIEW
+      async function fetchFileBlobFromItem(item, onProgress) {
+        const chunkIds = item.chunks || [item.id];
+        let loadedCount = 0;
 
-    function renderFiles(items) {
-      const tbody = document.getElementById('fileTableBody');
-      document.getElementById('fileCountBadge').innerText = items.length;
+        const downloadPromises = chunkIds.map(async (chunkId, index) => {
+          const proxiedUrl = `/api/file-proxy?token=${state.token}&fileId=${chunkId}&filename=${encodeURIComponent(item.name)}`;
+          const res = await fetch(proxiedUrl);
+          if (!res.ok) throw new Error(`Lỗi khi tải mảnh file ${index + 1}`);
 
-      if (items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-500">Thư mục trống.</td></tr>`;
-        return;
+          const blob = await res.blob();
+          loadedCount++;
+          if (onProgress) onProgress(loadedCount, chunkIds.length);
+          return { index, blob };
+        });
+
+        const results = await Promise.all(downloadPromises);
+        results.sort((a, b) => a.index - b.index);
+        const blobs = results.map(r => r.blob);
+
+        return new Blob(blobs, { type: 'application/octet-stream' });
       }
 
-      tbody.innerHTML = items.map(item => {
-        return `
-          <tr class="hover:bg-slate-700/30 transition">
-            <td class="p-4"><input type="checkbox" value="${item.id}" onchange="updateBatchButtonsVisibility()" class="item-checkbox rounded bg-slate-900 border-slate-700 text-indigo-600"></td>
-            <td class="p-4 font-semibold text-slate-200">
-              ${item.isFolder ? '📁 ' + item.name : '📄 ' + item.name}
-            </td>
-            <td class="p-4 text-slate-400 text-xs">${item.isFolder ? '--' : formatBytes(item.size)}</td>
-            <td class="p-4 text-slate-400 text-xs">${item.date}</td>
-            <td class="p-4 text-right space-x-1.5">
-              ${item.isFolder 
-                ? `<button onclick="openFolder('${item.id}')" class="bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-xl text-xs font-semibold">📂 Mở</button>`
-                : `
-                  <button onclick="previewFile('${item.id}')" class="bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold">👁️ Xem</button>
-                  <button onclick="downloadFileById('${item.id}')" class="bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold">⬇️ Tải</button>
-                `}
-              <button onclick="deleteSingleItem('${item.id}')" class="bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold">🗑️ Xóa</button>
-            </td>
-          </tr>`;
-      }).join('');
-    }
+      async function downloadFileById(itemId) {
+        const item = state.dbFiles.find(f => f.id === itemId);
+        if (!item) return alert("❌ Không tìm thấy thông tin tệp!");
 
-    function toggleSelectAll(mainCheckbox) {
-      const checkboxes = document.querySelectorAll('.item-checkbox');
-      checkboxes.forEach(cb => cb.checked = mainCheckbox.checked);
-      updateBatchButtonsVisibility();
-    }
+        const progressModal = document.getElementById('progressModal');
+        const progressBar = document.getElementById('progressBar');
+        const percentText = document.getElementById('percentText');
+        const statusText = document.getElementById('statusText');
+        const queueCountText = document.getElementById('queueCountText');
 
-    function updateBatchButtonsVisibility() {
-      const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
-      const deleteBtn = document.getElementById('deleteSelectedBtn');
-      const downloadBtn = document.getElementById('downloadSelectedBtn');
+        progressModal.classList.remove('hidden');
+        queueCountText.innerText = "Đang tải các mảnh song song...";
 
-      if (checkedBoxes.length > 0) {
-        deleteBtn.classList.remove('hidden');
-        downloadBtn.classList.remove('hidden');
-      } else {
-        deleteBtn.classList.add('hidden');
-        downloadBtn.classList.add('hidden');
+        try {
+          let fullBlob;
+          if (previewCache.has(itemId)) {
+            fullBlob = previewCache.get(itemId);
+          } else {
+            fullBlob = await fetchFileBlobFromItem(item, (current, total) => {
+              const percent = Math.round((current / total) * 100);
+              progressBar.style.width = percent + '%';
+              percentText.innerText = percent + '%';
+              statusText.innerText = `📥 Tải song song các mảnh (${current}/${total}): ${item.name}`;
+            });
+
+            if (previewCache.size >= CONFIG.MAX_CACHE_SIZE) {
+              const oldestKey = previewCache.keys().next().value;
+              previewCache.delete(oldestKey);
+            }
+            previewCache.set(itemId, fullBlob);
+          }
+
+          progressBar.style.width = '100%';
+          percentText.innerText = '100%';
+          statusText.innerText = "✅ Hoàn tất ghép file! Đang lưu xuống máy...";
+          
+          const link = document.createElement('a');
+          const blobUrl = URL.createObjectURL(fullBlob);
+          link.href = blobUrl;
+          link.download = item.name;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(blobUrl);
+        } catch (err) {
+          alert("❌ Lỗi trong quá trình kết nối và ghép file: " + err.message);
+        } finally {
+          setTimeout(() => {
+            progressModal.classList.add('hidden');
+            progressBar.style.width = '0%';
+            percentText.innerText = '0%';
+          }, 2000);
+        }
       }
-    }
 
-    // HIỂN THỊ MODAL BẢN SAO LƯU ĐÚNG THỨ TỰ TỪ TRÊN XUỐNG DƯỚI (BACKUP_1 LÀ MỚI NHẤT Ở VỊ TRÍ 1)
-    async function openBackupHistoryModal() {
-      const modal = document.getElementById('backupModal');
-      const container = document.getElementById('backupListContainer');
-      modal.classList.remove('hidden');
-      container.innerHTML = `<div class="text-center py-6 text-amber-400 text-xs font-semibold">⏳ Đang lấy danh sách các bản sao lưu...</div>`;
+      async function previewFile(itemId) {
+        const item = state.dbFiles.find(f => f.id === itemId);
+        if (!item) return;
 
-      try {
-        const res = await fetch(`${BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(CURRENT_MTB)}&t=${Date.now()}`);
-        const listData = await res.json();
+        const modal = document.getElementById('previewModal');
+        const title = document.getElementById('previewTitle');
+        const content = document.getElementById('previewContent');
+        const downloadBtn = document.getElementById('previewDownloadBtn');
 
-        if (!listData || listData.length === 0) {
-          container.innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">Tài khoản này chưa có bản sao lưu nào.</div>`;
+        title.innerText = `👁️ Đang xem: ${item.name}`;
+        downloadBtn.onclick = () => downloadFileById(itemId);
+        modal.classList.remove('hidden');
+
+        if (state.activePreviewObjectUrl) {
+          URL.revokeObjectURL(state.activePreviewObjectUrl);
+          state.activePreviewObjectUrl = null;
+        }
+
+        let fullBlob;
+        if (previewCache.has(itemId)) {
+          content.innerHTML = `<div class="text-emerald-400 text-xs font-semibold">⚡ Đã tải từ bộ nhớ đệm nhanh!</div>`;
+          fullBlob = previewCache.get(itemId);
+          await new Promise(r => setTimeout(r, 200));
+        } else {
+          content.innerHTML = `<div class="text-amber-400 text-xs font-semibold animate-pulse">⏳ Đang tải song song các phần của file...</div>`;
+          try {
+            fullBlob = await fetchFileBlobFromItem(item);
+
+            if (previewCache.size >= CONFIG.MAX_CACHE_SIZE) {
+              const oldestKey = previewCache.keys().next().value;
+              previewCache.delete(oldestKey);
+            }
+            previewCache.set(itemId, fullBlob);
+          } catch (err) {
+            content.innerHTML = `<div class="text-rose-400 text-xs font-semibold">❌ Không thể tải hoặc ghép nội dung xem trước!</div>`;
+            return;
+          }
+        }
+
+        try {
+          state.activePreviewObjectUrl = URL.createObjectURL(fullBlob);
+          const ext = item.name.split('.').pop().toLowerCase();
+
+          if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) {
+            content.innerHTML = `<img src="${state.activePreviewObjectUrl}" class="max-h-[70vh] max-w-full rounded-lg object-contain border border-slate-700 shadow-md" alt="${escapeHtml(item.name)}">`;
+          } else if (['mp4', 'webm', 'ogg', 'mov'].includes(ext)) {
+            content.innerHTML = `<video controls src="${state.activePreviewObjectUrl}" class="max-h-[70vh] max-w-full rounded-lg shadow-md"></video>`;
+          } else if (['mp3', 'wav', 'm4a'].includes(ext)) {
+            content.innerHTML = `<audio controls src="${state.activePreviewObjectUrl}" class="w-full max-w-md"></audio>`;
+          } else if (['txt', 'json', 'js', 'html', 'css', 'csv', 'md'].includes(ext)) {
+            const text = await fullBlob.text();
+            content.innerHTML = `<pre class="text-xs text-emerald-400 font-mono w-full max-h-[65vh] overflow-auto text-left whitespace-pre-wrap bg-slate-950 p-4 rounded-lg border border-slate-800">${escapeHtml(text)}</pre>`;
+          } else if (ext === 'pdf') {
+            content.innerHTML = `<iframe src="${state.activePreviewObjectUrl}" class="w-full h-[65vh] rounded-lg border border-slate-700"></iframe>`;
+          } else {
+            content.innerHTML = `
+              <div class="text-center space-y-3 p-4">
+                <div class="text-4xl">📄</div>
+                <div class="text-xs text-slate-300">Định dạng <strong>.${escapeHtml(ext)}</strong> không hỗ trợ xem trực tiếp.</div>
+                <button id="previewInnerDownloadBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-2 rounded-xl font-semibold">
+                  ⬇️ Tải Xuống Ngay
+                </button>
+              </div>`;
+            document.getElementById('previewInnerDownloadBtn').onclick = () => downloadFileById(itemId);
+          }
+        } catch (err) {
+          content.innerHTML = `<div class="text-rose-400 text-xs font-semibold">❌ Lỗi hiển thị nội dung xem trước!</div>`;
+        }
+      }
+
+      function closePreviewModal() {
+        document.getElementById('previewModal').classList.add('hidden');
+        if (state.activePreviewObjectUrl) {
+          URL.revokeObjectURL(state.activePreviewObjectUrl);
+          state.activePreviewObjectUrl = null;
+        }
+      }
+
+      // THAO TÁC CƠ SỞ DỮ LIỆU & QUẢN LÝ TỆP/THƯ MỤC
+      function createNewFolder() {
+        const folderName = prompt("Nhập tên thư mục mới:");
+        if (!folderName || !folderName.trim()) return;
+
+        state.dbFiles.unshift({
+          id: "folder_" + Date.now(),
+          name: folderName.trim(),
+          isFolder: true,
+          parentId: state.currentFolderId,
+          date: new Date().toLocaleString('vi-VN')
+        });
+
+        renderFiles(getCurrentFolderItems());
+        autoTriggerAllBackups();
+      }
+
+      function getCurrentFolderItems() {
+        return state.dbFiles.filter(item => (item.parentId || null) === state.currentFolderId);
+      }
+
+      function openFolder(folderId) {
+        state.currentFolderId = folderId;
+        renderBreadcrumb();
+        renderFiles(getCurrentFolderItems());
+      }
+
+      function renderBreadcrumb() {
+        const breadcrumbBar = document.getElementById('breadcrumbBar');
+        let path = [{ id: null, name: "🏠 Trang Chủ" }];
+        let curr = state.currentFolderId;
+        let tempStack = [];
+
+        while (curr) {
+          const found = state.dbFiles.find(item => item.id === curr);
+          if (found) {
+            tempStack.unshift({ id: found.id, name: found.name });
+            curr = found.parentId;
+          } else break;
+        }
+
+        path = path.concat(tempStack);
+        breadcrumbBar.innerHTML = path.map((node, index) => {
+          const isLast = index === path.length - 1;
+          const safeName = escapeHtml(node.name);
+          return isLast 
+            ? `<span class="font-bold text-indigo-400 flex items-center gap-1">${safeName}</span>`
+            : `<button data-folder-id="${node.id || ''}" class="btn-breadcrumb hover:text-indigo-300 font-medium transition">${safeName}</button> <span class="text-slate-500">/</span>`;
+        }).join(' ');
+
+        breadcrumbBar.querySelectorAll('.btn-breadcrumb').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const fId = e.currentTarget.getAttribute('data-folder-id') || null;
+            openFolder(fId);
+          });
+        });
+      }
+
+      function renderFiles(items) {
+        const tbody = document.getElementById('fileTableBody');
+        document.getElementById('fileCountBadge').innerText = items.length;
+
+        if (items.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-500">Thư mục trống.</td></tr>`;
           return;
         }
 
-        // listData giữ nguyên thứ tự Backend trả về từ hàng 1 đến hàng 4 (BACKUP_1 ở trên cùng)
-        container.innerHTML = listData.map((item, index) => {
-          const fullJsonData = item.mainData || item.backupData;
-          const encodedData = encodeURIComponent(fullJsonData);
-          const isFirst = index === 0; // BACKUP_1 là mới nhất nằm trên cùng
-          
+        tbody.innerHTML = items.map(item => {
+          const safeName = escapeHtml(item.name);
           return `
-            <div class="bg-slate-900 border ${isFirst ? 'border-emerald-500/80 shadow-lg shadow-emerald-500/10' : 'border-purple-500/30'} p-3.5 rounded-xl space-y-2.5 relative">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                  <div class="text-xs font-bold ${isFirst ? 'text-emerald-400' : 'text-slate-100'}">
-                    🕒 ${item.timeStr || item.label}
-                  </div>
-                  ${isFirst ? '<span class="bg-emerald-500/20 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full font-bold border border-emerald-500/40 animate-pulse">🌟 MỚI NHẤT (BACKUP_1)</span>' : ''}
-                </div>
-                <span class="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded border border-purple-500/30">
-                  MTB: ${CURRENT_MTB}
-                </span>
-              </div>
-
-              <div class="flex justify-end pt-1">
-                <button onclick="applyBackupFromCloud('${encodedData}')" class="${isFirst ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-purple-600 hover:bg-purple-500'} text-white text-xs px-3 py-1.5 rounded-lg font-semibold transition flex items-center gap-1">
-                  📥 Khôi Phục Bản Lưu Này
-                </button>
-              </div>
-            </div>
-          `;
+            <tr class="hover:bg-slate-700/30 transition">
+              <td class="p-4"><input type="checkbox" value="${item.id}" class="item-checkbox rounded bg-slate-900 border-slate-700 text-indigo-600"></td>
+              <td class="p-4 font-semibold text-slate-200">
+                ${item.isFolder ? '📁 ' + safeName : '📄 ' + safeName}
+              </td>
+              <td class="p-4 text-slate-400 text-xs">${item.isFolder ? '--' : formatBytes(item.size)}</td>
+              <td class="p-4 text-slate-400 text-xs">${escapeHtml(item.date)}</td>
+              <td class="p-4 text-right space-x-1.5">
+                ${item.isFolder 
+                  ? `<button data-action="open" data-id="${item.id}" class="bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-xl text-xs font-semibold">📂 Mở</button>`
+                  : `
+                    <button data-action="preview" data-id="${item.id}" class="bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold">👁️ Xem</button>
+                    <button data-action="download" data-id="${item.id}" class="bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold">⬇️ Tải</button>
+                  `}
+                <button data-action="delete" data-id="${item.id}" class="bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold">🗑️ Xóa</button>
+              </td>
+            </tr>`;
         }).join('');
 
-      } catch (err) {
-        container.innerHTML = `<div class="text-center py-6 text-rose-400 text-xs">❌ Lỗi kết nối danh sách sao lưu!</div>`;
+        tbody.querySelectorAll('.item-checkbox').forEach(cb => {
+          cb.addEventListener('change', updateBatchButtonsVisibility);
+        });
+
+        tbody.querySelectorAll('button[data-action]').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const action = e.currentTarget.getAttribute('data-action');
+            const id = e.currentTarget.getAttribute('data-id');
+            if (action === 'open') openFolder(id);
+            if (action === 'preview') previewFile(id);
+            if (action === 'download') downloadFileById(id);
+            if (action === 'delete') deleteSingleItem(id);
+          });
+        });
       }
-    }
 
-    function closeBackupModal() {
-      document.getElementById('backupModal').classList.add('hidden');
-    }
+      function toggleSelectAll(mainCheckbox) {
+        const checkboxes = document.querySelectorAll('.item-checkbox');
+        checkboxes.forEach(cb => cb.checked = mainCheckbox.checked);
+        updateBatchButtonsVisibility();
+      }
 
-    async function applyBackupFromCloud(encodedJsonData) {
-      try {
-        const jsonStr = decodeURIComponent(encodedJsonData);
-        const importedData = JSON.parse(jsonStr);
+      function updateBatchButtonsVisibility() {
+        const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
+        const deleteBtn = document.getElementById('deleteSelectedBtn');
+        const downloadBtn = document.getElementById('downloadSelectedBtn');
 
-        if (Array.isArray(importedData)) {
-          if (confirm(`Khôi phục ${importedData.length} mục từ bản sao lưu này?`)) {
-            dbFiles = importedData;
-            previewCache.clear();
-            renderBreadcrumb();
-            renderFiles(getCurrentFolderItems());
-            updateStorageUsage();
-            
-            await autoTriggerAllBackups();
-            closeBackupModal();
-            alert("🎉 Khôi phục dữ liệu thành công!");
-          }
+        if (checkedBoxes.length > 0) {
+          deleteBtn.classList.remove('hidden');
+          downloadBtn.classList.remove('hidden');
+        } else {
+          deleteBtn.classList.add('hidden');
+          downloadBtn.classList.add('hidden');
         }
-      } catch (e) {
-        alert("❌ Lỗi dữ liệu sao lưu!");
-      }
-    }
-
-    function filterFiles() {
-      const search = document.getElementById('searchInput').value.toLowerCase();
-      const currentItems = getCurrentFolderItems();
-
-      const filtered = currentItems.filter(item => {
-        return item.name.toLowerCase().includes(search);
-      });
-
-      renderFiles(filtered);
-    }
-
-    function updateStorageUsage() {
-      const storageUsageText = document.getElementById('storageUsageText');
-      const progressBar = document.getElementById('storageProgressBar');
-
-      if (!MAX_STORAGE_GB) {
-        if (storageUsageText) storageUsageText.innerText = "Đang cập nhật dung lượng...";
-        if (progressBar) progressBar.style.width = "0%";
-        return;
       }
 
-      const maxBytes = MAX_STORAGE_GB * 1024 * 1024 * 1024;
-      const totalBytes = dbFiles.reduce((sum, item) => sum + (item.size || 0), 0);
-      const usedPercentage = Math.min(100, ((totalBytes / maxBytes) * 100).toFixed(1));
-      
-      if (storageUsageText) storageUsageText.innerText = `${formatBytes(totalBytes)} / ${MAX_STORAGE_GB} GB (${usedPercentage}%)`;
-      if (progressBar) progressBar.style.width = `${usedPercentage}%`;
-    }
+      async function downloadSelectedItems() {
+        const checkedBoxes = Array.from(document.querySelectorAll('.item-checkbox:checked'));
+        if (checkedBoxes.length === 0) return;
 
-    function logout() {
-      localStorage.clear();
-      location.reload();
-    }
+        const items = checkedBoxes.map(cb => state.dbFiles.find(f => f.id === cb.value)).filter(f => f && !f.isFolder);
+        if (items.length === 0) return alert("⚠️ Vui lòng chọn tệp lẻ để tải xuống!");
 
-    function formatBytes(bytes) {
-      if (!bytes || bytes === 0) return '0 Bytes';
-      const k = 1024;
-      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
+        const downloadBtn = document.getElementById('downloadSelectedBtn');
+        downloadBtn.disabled = true;
 
-    function escapeHtml(text) {
-      return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-    }
+        for (let i = 0; i < items.length; i++) {
+          await downloadFileById(items[i].id);
+          await new Promise(r => setTimeout(r, 1000));
+        }
+
+        downloadBtn.disabled = false;
+      }
+
+      async function deleteSelectedItems() {
+        const checkedBoxes = Array.from(document.querySelectorAll('.item-checkbox:checked'));
+        if (checkedBoxes.length === 0) return;
+
+        if (!confirm(`Bạn có chắc chắn muốn xóa ${checkedBoxes.length} mục đã chọn?`)) return;
+
+        const deleteBtn = document.getElementById('deleteSelectedBtn');
+        deleteBtn.disabled = true;
+
+        for (let i = 0; i < checkedBoxes.length; i++) {
+          const id = checkedBoxes[i].value;
+          state.dbFiles = state.dbFiles.filter(f => f.id !== id);
+          if (previewCache.has(id)) previewCache.delete(id);
+        }
+
+        renderFiles(getCurrentFolderItems());
+        updateStorageUsage();
+
+        await autoTriggerAllBackups();
+
+        deleteBtn.disabled = false;
+        document.getElementById('selectAllCheckbox').checked = false;
+        toggleSelectAll({ checked: false });
+        alert("✅ Đã xóa hoàn tất!");
+      }
+
+      async function deleteSingleItem(id) {
+        const item = state.dbFiles.find(f => f.id === id);
+        if (!item || !confirm(`Xóa vĩnh viễn "${item.name}"?`)) return;
+
+        state.dbFiles = state.dbFiles.filter(f => f.id !== id);
+        if (previewCache.has(id)) previewCache.delete(id);
+
+        renderFiles(getCurrentFolderItems());
+        updateStorageUsage();
+
+        await autoTriggerAllBackups();
+      }
+
+      function filterFiles() {
+        const search = document.getElementById('searchInput').value.toLowerCase();
+        const currentItems = getCurrentFolderItems();
+
+        const filtered = currentItems.filter(item => {
+          return item.name.toLowerCase().includes(search);
+        });
+
+        renderFiles(filtered);
+      }
+
+      function updateStorageUsage() {
+        const storageUsageText = document.getElementById('storageUsageText');
+        const progressBar = document.getElementById('storageProgressBar');
+
+        if (!state.maxStorageGb) {
+          if (storageUsageText) storageUsageText.innerText = "Đang cập nhật dung lượng...";
+          if (progressBar) progressBar.style.width = "0%";
+          return;
+        }
+
+        const maxBytes = state.maxStorageGb * 1024 * 1024 * 1024;
+        const totalBytes = state.dbFiles.reduce((sum, item) => sum + (item.size || 0), 0);
+        const usedPercentage = Math.min(100, ((totalBytes / maxBytes) * 100).toFixed(1));
+        
+        if (storageUsageText) {
+          storageUsageText.innerText = `${formatBytes(totalBytes)} / ${state.maxStorageGb} GB (${usedPercentage}%)`;
+        }
+        if (progressBar) {
+          progressBar.style.width = `${usedPercentage}%`;
+        }
+      }
+
+      // LỊCH SỬ SAO LƯU (BACKUP)
+      async function openBackupHistoryModal() {
+        const modal = document.getElementById('backupModal');
+        const container = document.getElementById('backupListContainer');
+        modal.classList.remove('hidden');
+        container.innerHTML = `<div class="text-center py-6 text-amber-400 text-xs font-semibold">⏳ Đang lấy danh sách bản sao lưu...</div>`;
+
+        try {
+          const res = await fetch(`${CONFIG.BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(state.mtb)}&t=${Date.now()}`);
+          const listData = await res.json();
+
+          if (!Array.isArray(listData) || listData.length === 0) {
+            container.innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">Tài khoản này chưa có bản sao lưu nào trên Google Sheet.</div>`;
+            return;
+          }
+
+          const recentBackups = listData.slice().reverse();
+
+          container.innerHTML = recentBackups.map((item, index) => {
+            const fullJsonData = item.mainData || item.backupData;
+            const encodedData = encodeURIComponent(typeof fullJsonData === 'string' ? fullJsonData : JSON.stringify(fullJsonData));
+            
+            return `
+              <div class="bg-slate-900 border border-purple-500/30 p-3.5 rounded-xl space-y-2.5">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <div class="text-xs font-bold text-slate-100">🕒 ${escapeHtml(item.time)}</div>
+                  </div>
+                  <span class="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded border border-purple-500/30">
+                    MTB: ${escapeHtml(state.mtb)}
+                  </span>
+                </div>
+
+                <div class="flex justify-end pt-1">
+                  <button data-backup="${encodedData}" class="btn-restore-backup bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1.5 rounded-lg font-semibold transition flex items-center gap-1">
+                    📥 Khôi Phục Bản Lưu Này
+                  </button>
+                </div>
+              </div>
+            `;
+          }).join('');
+
+          container.querySelectorAll('.btn-restore-backup').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              const dataStr = e.currentTarget.getAttribute('data-backup');
+              applyBackupFromCloud(dataStr);
+            });
+          });
+
+        } catch (err) {
+          container.innerHTML = `<div class="text-center py-6 text-rose-400 text-xs">❌ Lỗi kết nối danh sách sao lưu!</div>`;
+        }
+      }
+
+      function closeBackupModal() {
+        document.getElementById('backupModal').classList.add('hidden');
+      }
+
+      async function applyBackupFromCloud(encodedJsonData) {
+        try {
+          const jsonStr = decodeURIComponent(encodedJsonData);
+          const importedData = JSON.parse(jsonStr);
+
+          if (Array.isArray(importedData)) {
+            if (confirm(`Khôi phục ${importedData.length} mục từ bản sao lưu này?`)) {
+              state.dbFiles = importedData;
+              previewCache.clear();
+              renderBreadcrumb();
+              renderFiles(getCurrentFolderItems());
+              updateStorageUsage();
+              
+              await autoTriggerAllBackups();
+              closeBackupModal();
+              alert("🎉 Khôi phục dữ liệu thành công!");
+            }
+          }
+        } catch (e) {
+          alert("❌ Lỗi dữ liệu sao lưu!");
+        }
+      }
+
+    })();
   </script>
 </body>
 </html>
