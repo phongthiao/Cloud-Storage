@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cloud Storage Pro - Video Stream Fixed</title>
+  <title>Cloud Storage Pro - Stable Streaming</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen p-4 sm:p-6 font-sans select-none" id="dropZone">
@@ -52,10 +52,9 @@
       <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
           <h1 class="text-2xl font-bold text-indigo-400 flex items-center gap-2">⚡ Cloud Storage Pro</h1>
-          <p class="text-xs text-slate-400 mt-1">Hệ thống lưu trữ phân mảnh • Phát Video chuẩn 100%</p>
+          <p class="text-xs text-slate-400 mt-1">Hệ thống lưu trữ phân mảnh • Khắc phục lỗi Chunk</p>
         </div>
         
-        <!-- Thanh Điều Hướng -->
         <div class="flex flex-wrap items-center gap-2">
           <span id="userInfoBadge" class="text-xs bg-indigo-500/20 text-indigo-300 px-3 py-2 rounded-xl border border-indigo-500/30 font-mono">Thiết bị: ...</span>
 
@@ -104,7 +103,6 @@
         <input type="file" id="fileInput" multiple class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 bg-slate-900 rounded-xl border border-slate-700 p-1 cursor-pointer" onchange="handleFileSelect(event)">
       </div>
 
-      <!-- Thanh Tiến Trình -->
       <div id="progressModal" class="hidden bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3">
         <div class="flex justify-between text-xs text-slate-300">
           <span id="statusText" class="truncate max-w-md">Chuẩn bị...</span>
@@ -251,7 +249,6 @@
     const MAX_PREVIEW_CACHE = 5;
 
     const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB
-    const CONCURRENCY_LIMIT = 3;
 
     window.onload = async () => {
       setupDragAndDrop();
@@ -443,13 +440,22 @@
           const formData = new FormData();
           formData.append('document', chunkBlob, `${file.name}.part${c}`);
 
-          const res = await fetch('/api/upload-chunk', { method: 'POST', body: formData });
-          const data = await res.json();
+          let uploadSuccess = false;
+          for (let retry = 0; retry < 3; retry++) {
+            try {
+              const res = await fetch('/api/upload-chunk', { method: 'POST', body: formData });
+              const data = await res.json();
+              if (data.success) {
+                chunkIds.push(data.file_id);
+                uploadSuccess = true;
+                break;
+              }
+            } catch (err) {}
+            await new Promise(r => setTimeout(r, 1000));
+          }
 
-          if (data.success) {
-            chunkIds.push(data.file_id);
-          } else {
-            alert(`❌ Lỗi Upload tệp ${file.name}: ${data.message}`);
+          if (!uploadSuccess) {
+            alert(`❌ Lỗi Upload mảnh #${c+1} của tệp ${file.name}`);
             break;
           }
         }
@@ -476,32 +482,39 @@
       progressModal.classList.add('hidden');
     }
 
-    async function fetchChunksWithLimit(chunks, filename, limit = CONCURRENCY_LIMIT) {
+    // TẢI CHUNK TUẦN TỰ (SEQUENTIAL QUEUE) VỚI TÍNH NĂNG RETRY CHỐNG NGHẼN TELEGRAM
+    async function fetchChunksWithLimit(chunks, filename, progressCallback) {
       const results = new Array(chunks.length);
-      let executing = [];
 
       for (let i = 0; i < chunks.length; i++) {
         const chunkId = chunks[i];
         const proxyUrl = `/api/file-proxy?fileId=${encodeURIComponent(chunkId)}&filename=${encodeURIComponent(filename)}`;
         
-        const p = fetch(proxyUrl)
-          .then(r => {
-            if (!r.ok) throw new Error(`Lỗi tải mảnh #${i+1}`);
-            return r.blob();
-          })
-          .then(blob => {
-            results[i] = blob;
-          });
+        if (progressCallback) progressCallback(i + 1, chunks.length);
 
-        executing.push(p);
+        let downloadedBlob = null;
+        let lastError = null;
 
-        if (executing.length >= limit) {
-          await Promise.race(executing);
-          executing = executing.filter(item => item !== p);
+        // Thử lại tối đa 3 lần nếu mảnh bị lỗi
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const res = await fetch(proxyUrl);
+            if (!res.ok) throw new Error(`HTTP Status ${res.status}`);
+            downloadedBlob = await res.blob();
+            break; 
+          } catch (err) {
+            lastError = err;
+            await new Promise(r => setTimeout(r, 1500 * attempt)); // Chờ tăng dần
+          }
         }
+
+        if (!downloadedBlob) {
+          throw new Error(`Lỗi tải mảnh #${i + 1}`);
+        }
+
+        results[i] = downloadedBlob;
       }
 
-      await Promise.all(executing);
       return results;
     }
 
@@ -520,16 +533,16 @@
       return mimeTypes[ext] || 'application/octet-stream';
     }
 
-    async function fetchFileBlobFromItem(item) {
+    async function fetchFileBlobFromItem(item, progressCallback) {
       if (previewCache.has(item.id)) {
         return previewCache.get(item.id);
       }
 
       if (!item.chunks || item.chunks.length === 0) {
-        throw new Error("Không tìm thấy các mảnh Chunk của tệp!");
+        throw new Error("Tệp không tìm thấy mảnh Chunk!");
       }
 
-      const blobParts = await fetchChunksWithLimit(item.chunks, item.name, CONCURRENCY_LIMIT);
+      const blobParts = await fetchChunksWithLimit(item.chunks, item.name, progressCallback);
       
       const totalDownloadedBytes = blobParts.reduce((sum, b) => sum + (b ? b.size : 0), 0);
       if (item.size && totalDownloadedBytes < item.size * 0.95) {
@@ -560,14 +573,18 @@
 
       modal.classList.remove('hidden');
       title.innerText = `🎬 Xem trước: ${item.name}`;
-      body.innerHTML = `
-        <div class="text-center space-y-2">
-          <div class="text-3xl animate-bounce">⏳</div>
-          <p class="text-indigo-400 text-sm font-semibold">Đang giải mã và gộp các mảnh dữ liệu...</p>
-        </div>`;
+      
+      const updateStatus = (current, total) => {
+        body.innerHTML = `
+          <div class="text-center space-y-3">
+            <div class="text-4xl animate-bounce">⏳</div>
+            <p class="text-indigo-400 text-sm font-semibold">Đang tải và ổn định luồng dữ liệu Video...</p>
+            <p class="text-xs text-emerald-400 font-mono font-bold">Đã tải mảnh: ${current} / ${total}</p>
+          </div>`;
+      };
 
       try {
-        const objectUrl = await fetchFileBlobFromItem(item);
+        const objectUrl = await fetchFileBlobFromItem(item, updateStatus);
         const ext = getFileExtension(item.name);
         const mimeType = getMimeType(item.name);
 
@@ -587,7 +604,7 @@
             </div>`;
         } else if (ext === 'pdf') {
           body.innerHTML = `<iframe src="${objectUrl}" class="w-full h-[75vh] rounded-lg"></iframe>`;
-        } else if (['txt', 'json', 'html', 'js', 'css', 'md', 'py'].includes(ext)) {
+        } else if (['txt', 'json', 'html', 'js', 'css', 'md', 'py', 'cpp', 'c'].includes(ext)) {
           const textRes = await fetch(objectUrl);
           const textContent = await textRes.text();
           body.innerHTML = `<pre class="bg-slate-900 p-4 rounded-lg text-xs text-slate-200 overflow-auto max-h-[75vh] w-full font-mono select-text">${escapeHtml(textContent)}</pre>`;
@@ -626,20 +643,16 @@
       if (!item || item.isFolder) return;
 
       try {
-        const objectUrl = await fetchFileBlobFromItem(item);
+        const objectUrl = await fetchFileBlobFromItem(item, (c, t) => {});
         const a = document.createElement('a');
         a.href = objectUrl;
         a.download = item.name;
         a.style.display = 'none';
         document.body.appendChild(a);
-        
         a.click();
-        
-        setTimeout(() => {
-          document.body.removeChild(a);
-        }, 100);
+        setTimeout(() => document.body.removeChild(a), 100);
       } catch (err) {
-        alert("❌ Lỗi tải tệp: " + err.message);
+        alert("❌ " + err.message);
       }
     }
 
@@ -727,7 +740,7 @@
           const ext = getFileExtension(f.name);
           if (typeFilter === 'image') return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
           if (typeFilter === 'video') return ['mp4', 'webm', 'mkv', 'mov'].includes(ext);
-          if (typeFilter === 'doc') return ['pdf', 'txt', 'doc', 'docx', 'xls', 'xlsx', 'json', 'js', 'html'].includes(ext);
+          if (typeFilter === 'doc') return ['pdf', 'txt', 'doc', 'docx', 'xls', 'xlsx', 'json', 'js', 'html', 'cpp'].includes(ext);
           return true;
         });
       }
