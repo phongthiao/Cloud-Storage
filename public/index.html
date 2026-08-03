@@ -6,7 +6,7 @@
   <title>Cloud Storage - Ultimate Edition</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen p-4 sm:p-6 font-sans">
+<body class="bg-slate-900 text-slate-100 min-h-screen p-4 sm:p-6 font-sans select-none">
   
   <!-- MÀN HÌNH ĐĂNG NHẬP -->
   <div id="loginScreen" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center z-50 p-4">
@@ -51,7 +51,7 @@
           <span id="userInfoBadge" class="text-xs bg-indigo-500/20 text-indigo-300 px-3 py-2 rounded-xl border border-indigo-500/30 font-mono">Thiết bị: ...</span>
 
           <button onclick="manualBackupToSheet()" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-xl transition font-semibold flex items-center gap-1 shadow-lg shadow-emerald-600/20">
-            💾 Sao Lưu Sheet
+            💾 Sao Lưu Dữ Liệu
           </button>
 
           <button onclick="openBackupHistoryModal()" class="text-xs bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 px-3 py-2 rounded-xl transition font-semibold flex items-center gap-1">
@@ -98,15 +98,42 @@
       </div>
     </div>
 
-    <!-- Bảng Danh Sách File / Folder -->
+    <!-- Bộ Lọc, Tìm Kiếm & Bảng Danh Sách -->
     <div class="bg-slate-800 rounded-2xl shadow-lg border border-slate-700 overflow-hidden space-y-2">
+      <!-- Breadcrumb -->
       <div class="bg-slate-900/60 px-6 py-3 border-b border-slate-700 flex items-center gap-2 text-sm text-slate-300 overflow-x-auto" id="breadcrumbBar"></div>
 
+      <!-- Thanh Tìm Kiếm, Filter & Sort -->
+      <div class="p-4 border-b border-slate-700/60 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 bg-slate-800/50">
+        <div class="relative flex-1">
+          <input type="text" id="searchInput" oninput="applyFilters()" placeholder="🔍 Tìm kiếm tệp hoặc thư mục..." class="w-full bg-slate-900 border border-slate-700 text-xs px-3.5 py-2 rounded-xl outline-none focus:border-indigo-500">
+        </div>
+        
+        <div class="flex flex-wrap items-center gap-2">
+          <select id="typeFilter" onchange="applyFilters()" class="bg-slate-900 border border-slate-700 text-xs px-3 py-2 rounded-xl outline-none text-slate-300">
+            <option value="all">📂 Tất cả loại tệp</option>
+            <option value="folder">📁 Thư mục</option>
+            <option value="image">🖼️ Hình ảnh</option>
+            <option value="video">🎥 Video</option>
+            <option value="doc">📄 Tài liệu / Mã nguồn</option>
+          </select>
+
+          <select id="sortBy" onchange="applyFilters()" class="bg-slate-900 border border-slate-700 text-xs px-3 py-2 rounded-xl outline-none text-slate-300">
+            <option value="name_asc">🔤 Tên (A-Z)</option>
+            <option value="name_desc">🔤 Tên (Z-A)</option>
+            <option value="size_desc">📉 Dung lượng (Giảm)</option>
+            <option value="size_asc">📈 Dung lượng (Tăng)</option>
+            <option value="date_desc">🕒 Mới nhất</option>
+            <option value="date_asc">🕒 Cũ nhất</option>
+          </select>
+        </div>
+      </div>
+
       <!-- Thanh Thao Tác Chọn Nhiều (Multi-Select Toolbar) -->
-      <div class="p-4 border-b border-slate-700 flex flex-wrap justify-between items-center gap-3">
+      <div class="px-6 py-3 border-b border-slate-700 flex flex-wrap justify-between items-center gap-3 bg-slate-900/30">
         <div class="flex items-center gap-3">
-          <h2 class="font-bold text-slate-200 flex items-center gap-2">
-            📂 Danh Sách Tệp
+          <h2 class="font-bold text-slate-200 flex items-center gap-2 text-sm">
+            📁 Danh Sách Tệp
             <span id="fileCountBadge" class="text-xs bg-slate-700 text-indigo-300 px-2 py-0.5 rounded-full">0</span>
           </h2>
           <span id="selectedCountText" class="text-xs text-amber-400 font-semibold hidden">(Đã chọn: 0)</span>
@@ -114,7 +141,10 @@
 
         <div id="multiSelectActions" class="hidden flex items-center gap-2">
           <button onclick="downloadSelectedItems()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold shadow-md flex items-center gap-1">
-            📥 Tải Xuống Đã Chọn
+            📥 Tải Đã Chọn
+          </button>
+          <button onclick="openMoveModalForSelected()" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold shadow-md flex items-center gap-1">
+            🚚 Di Chuyển
           </button>
           <button onclick="deleteSelectedItems()" class="bg-rose-600 hover:bg-rose-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold shadow-md flex items-center gap-1">
             🗑️ Xóa Đã Chọn
@@ -122,6 +152,7 @@
         </div>
       </div>
 
+      <!-- Bảng File -->
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm text-slate-300">
           <thead class="bg-slate-900/50 text-slate-400 border-b border-slate-700 text-xs uppercase">
@@ -161,7 +192,7 @@
     <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-700 pb-3">
         <h3 class="text-lg font-bold text-purple-400 flex items-center gap-2">
-          📜 5 Bản Sao Lưu Trên Sheet
+          📜 5 Bản Sao Lưu Hệ Thống
         </h3>
         <button onclick="closeBackupModal()" class="text-slate-400 hover:text-white text-xl">&times;</button>
       </div>
@@ -170,6 +201,25 @@
       </div>
       <div class="flex justify-end pt-2">
         <button onclick="closeBackupModal()" class="bg-slate-700 hover:bg-slate-600 text-xs text-white px-4 py-2 rounded-xl">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DI CHUYỂN TỆP/THƯ MỤC -->
+  <div id="moveModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 hidden">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+      <h3 class="text-md font-bold text-amber-400 flex items-center gap-2 border-b border-slate-700 pb-2">
+        🚚 Chọn Thư Mục Đích
+      </h3>
+      <div class="space-y-2">
+        <label class="block text-xs text-slate-300">Chuyển đến thư mục:</label>
+        <select id="targetFolderSelect" class="w-full bg-slate-900 border border-slate-700 text-sm px-3 py-2 rounded-xl text-slate-200 outline-none">
+          <option value="null">🏠 Trang Chủ (Root)</option>
+        </select>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="closeMoveModal()" class="bg-slate-700 hover:bg-slate-600 text-xs text-white px-4 py-2 rounded-xl">Hủy</button>
+        <button onclick="executeMoveItems()" class="bg-amber-600 hover:bg-amber-500 text-xs text-white px-4 py-2 rounded-xl font-semibold">Xác Nhận Di Chuyển</button>
       </div>
     </div>
   </div>
@@ -183,12 +233,13 @@
     let dbFiles = [];
     let currentFolderId = null;
     let selectedFileIds = new Set();
+    let moveTargetItemIds = [];
 
-    // Cache quản lý URL Blob xem trước (Tối đa 5 file để không đơ RAM trình duyệt)
+    // Cache quản lý URL Blob xem trước
     const previewCache = new Map();
     const MAX_PREVIEW_CACHE = 5;
 
-    const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB/chunk
+    const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB/chunk phù hợp với Telegram Bot API
 
     window.onload = async () => {
       if (CURRENT_MTB && BOT_TOKEN && CHAT_ID) {
@@ -259,7 +310,7 @@
         console.error("Lỗi đọc dữ liệu:", e);
       } finally {
         renderBreadcrumb();
-        renderFiles(getCurrentFolderItems());
+        applyFilters();
         updateStorageUsage();
       }
     }
@@ -281,16 +332,14 @@
 
         const resData = await res.json();
         if (resData.success) {
-          alert("🎉 Đã sao lưu dữ liệu lên Google Sheet thành công!");
-        } else {
-          alert("❌ Lỗi sao lưu: " + resData.error);
+          console.log("Đã tự động sao lưu hệ thống.");
         }
       } catch (err) {
-        alert("❌ Lỗi truyền tải sao lưu!");
+        console.error("Lỗi truyền tải sao lưu!", err);
       }
     }
 
-    // UPLOAD TỆP CHIA MẢNH CHỐNG TRÀN
+    // UPLOAD TỆP CHIA MẢNH CHỐNG TRÀN RAM
     async function startBatchUploadQueue() {
       const input = document.getElementById('fileInput');
       const files = Array.from(input.files);
@@ -342,12 +391,13 @@
             chunks: chunkIds,
             isFolder: false,
             parentId: currentFolderId,
-            date: new Date().toLocaleString('vi-VN')
+            date: new Date().toLocaleString('vi-VN'),
+            timestamp: Date.now()
           });
         }
       }
 
-      renderFiles(getCurrentFolderItems());
+      applyFilters();
       updateStorageUsage();
       await manualBackupToSheet();
 
@@ -355,13 +405,12 @@
       progressModal.classList.add('hidden');
     }
 
-    // TẢI SONG SONG CÁC MẢNH FILE VỚI PROMISE.ALL & GIỚI HẠN CACHE
+    // TẢI SONG SONG CÁC MẢNH FILE DÙNG PROMISE.ALL TĂNG TỐC TỐI ĐA
     async function fetchFileBlobFromItem(item) {
       if (previewCache.has(item.id)) {
         return previewCache.get(item.id);
       }
 
-      // Tải tất cả mảnh file cùng lúc qua Promise.all()
       const downloadPromises = item.chunks.map(fileId => {
         const proxyUrl = `/api/file-proxy?token=${encodeURIComponent(BOT_TOKEN)}&fileId=${encodeURIComponent(fileId)}&filename=${encodeURIComponent(item.name)}`;
         return fetch(proxyUrl).then(r => {
@@ -374,7 +423,6 @@
       const fullBlob = new Blob(blobParts, { type: getMimeType(item.name) });
       const objectUrl = URL.createObjectURL(fullBlob);
 
-      // Quản lý RAM Cache trình duyệt tối đa 5 file
       if (previewCache.size >= MAX_PREVIEW_CACHE) {
         const oldestKey = previewCache.keys().next().value;
         URL.revokeObjectURL(previewCache.get(oldestKey));
@@ -410,7 +458,7 @@
           body.innerHTML = `<audio src="${objectUrl}" controls autoplay class="w-full max-w-md"></audio>`;
         } else if (ext === 'pdf') {
           body.innerHTML = `<iframe src="${objectUrl}" class="w-full h-[70vh] rounded-lg"></iframe>`;
-        } else if (['txt', 'json', 'html', 'js', 'css', 'md'].includes(ext)) {
+        } else if (['txt', 'json', 'html', 'js', 'css', 'md', 'py', 'c', 'cpp'].includes(ext)) {
           const textRes = await fetch(objectUrl);
           const textContent = await textRes.text();
           body.innerHTML = `<pre class="bg-slate-900 p-4 rounded-lg text-xs text-slate-200 overflow-auto max-h-[70vh] w-full font-mono select-text">${escapeHtml(textContent)}</pre>`;
@@ -448,6 +496,107 @@
       }
     }
 
+    // ĐỔI TÊN TỆP HOẶC THƯ MỤC
+    function renameItem(id) {
+      const item = dbFiles.find(f => f.id === id);
+      if (!item) return;
+
+      const newName = prompt("Nhập tên mới:", item.name);
+      if (newName && newName.trim() && newName.trim() !== item.name) {
+        item.name = newName.trim();
+        applyFilters();
+        manualBackupToSheet();
+      }
+    }
+
+    // DI CHUYỂN TỆP HOẶC THƯ MỤC
+    function openMoveModal(id) {
+      moveTargetItemIds = [id];
+      renderFolderOptions();
+      document.getElementById('moveModal').classList.remove('hidden');
+    }
+
+    function openMoveModalForSelected() {
+      if (selectedFileIds.size === 0) return;
+      moveTargetItemIds = Array.from(selectedFileIds);
+      renderFolderOptions();
+      document.getElementById('moveModal').classList.remove('hidden');
+    }
+
+    function renderFolderOptions() {
+      const select = document.getElementById('targetFolderSelect');
+      const folders = dbFiles.filter(f => f.isFolder && !moveTargetItemIds.includes(f.id));
+
+      select.innerHTML = `<option value="null">🏠 Trang Chủ (Root)</option>` +
+        folders.map(f => `<option value="${f.id}">📁 ${f.name}</option>`).join('');
+    }
+
+    function closeMoveModal() {
+      document.getElementById('moveModal').classList.add('hidden');
+      moveTargetItemIds = [];
+    }
+
+    function executeMoveItems() {
+      const targetVal = document.getElementById('targetFolderSelect').value;
+      const targetFolderId = targetVal === 'null' ? null : targetVal;
+
+      dbFiles.forEach(item => {
+        if (moveTargetItemIds.includes(item.id)) {
+          item.parentId = targetFolderId;
+        }
+      });
+
+      selectedFileIds.clear();
+      updateMultiSelectToolbar();
+      closeMoveModal();
+      applyFilters();
+      manualBackupToSheet();
+    }
+
+    // LỌC VÀ SẮP XẾP DANH SÁCH TỆP
+    function applyFilters() {
+      const searchQuery = document.getElementById('searchInput').value.trim().toLowerCase();
+      const typeFilter = document.getElementById('typeFilter').value;
+      const sortBy = document.getElementById('sortBy').value;
+
+      let items = getCurrentFolderItems();
+
+      // 1. Tìm kiếm
+      if (searchQuery) {
+        items = items.filter(f => f.name.toLowerCase().includes(searchQuery));
+      }
+
+      // 2. Lọc theo loại tệp
+      if (typeFilter !== 'all') {
+        items = items.filter(f => {
+          if (typeFilter === 'folder') return f.isFolder;
+          if (f.isFolder) return false;
+
+          const ext = getFileExtension(f.name);
+          if (typeFilter === 'image') return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+          if (typeFilter === 'video') return ['mp4', 'webm', 'mkv', 'avi'].includes(ext);
+          if (typeFilter === 'doc') return ['pdf', 'txt', 'doc', 'docx', 'xls', 'xlsx', 'json', 'js', 'html'].includes(ext);
+          return true;
+        });
+      }
+
+      // 3. Sắp xếp
+      items.sort((a, b) => {
+        if (a.isFolder && !b.isFolder) return -1;
+        if (!a.isFolder && b.isFolder) return 1;
+
+        if (sortBy === 'name_asc') return a.name.localeCompare(b.name);
+        if (sortBy === 'name_desc') return b.name.localeCompare(a.name);
+        if (sortBy === 'size_desc') return (b.size || 0) - (a.size || 0);
+        if (sortBy === 'size_asc') return (a.size || 0) - (b.size || 0);
+        if (sortBy === 'date_desc') return (b.timestamp || 0) - (a.timestamp || 0);
+        if (sortBy === 'date_asc') return (a.timestamp || 0) - (b.timestamp || 0);
+        return 0;
+      });
+
+      renderFiles(items);
+    }
+
     // THAO TÁC CHỌN NHIỀU (MULTI-SELECT)
     function toggleSelectAll(masterCheckbox) {
       const currentItems = getCurrentFolderItems();
@@ -457,7 +606,7 @@
         currentItems.forEach(item => selectedFileIds.add(item.id));
       }
 
-      renderFiles(currentItems);
+      applyFilters();
       updateMultiSelectToolbar();
     }
 
@@ -486,7 +635,6 @@
       }
     }
 
-    // TẢI XUỐNG CÁC TỆP ĐÃ CHỌN
     async function downloadSelectedItems() {
       const itemsToDownload = dbFiles.filter(f => selectedFileIds.has(f.id) && !f.isFolder);
       if (itemsToDownload.length === 0) return alert("Không có tệp nào được chọn để tải!");
@@ -496,14 +644,13 @@
       }
     }
 
-    // XÓA HÀNG LOẠT TỆP ĐÃ CHỌN
     function deleteSelectedItems() {
       if (selectedFileIds.size === 0) return;
       if (confirm(`Bạn có chắc chắn muốn xóa ${selectedFileIds.size} mục đã chọn?`)) {
         dbFiles = dbFiles.filter(item => !selectedFileIds.has(item.id));
         selectedFileIds.clear();
         updateMultiSelectToolbar();
-        renderFiles(getCurrentFolderItems());
+        applyFilters();
         updateStorageUsage();
         manualBackupToSheet();
       }
@@ -518,10 +665,11 @@
         name: folderName.trim(),
         isFolder: true,
         parentId: currentFolderId,
-        date: new Date().toLocaleString('vi-VN')
+        date: new Date().toLocaleString('vi-VN'),
+        timestamp: Date.now()
       });
 
-      renderFiles(getCurrentFolderItems());
+      applyFilters();
       manualBackupToSheet();
     }
 
@@ -534,7 +682,7 @@
       selectedFileIds.clear();
       updateMultiSelectToolbar();
       renderBreadcrumb();
-      renderFiles(getCurrentFolderItems());
+      applyFilters();
     }
 
     function renderBreadcrumb() {
@@ -564,7 +712,7 @@
       document.getElementById('fileCountBadge').innerText = items.length;
 
       if (items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-500">Thư mục trống.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-500">Không có tệp hoặc thư mục nào.</td></tr>`;
         return;
       }
 
@@ -575,16 +723,21 @@
             <td class="p-4 text-center">
               <input type="checkbox" onchange="toggleSelectItem('${item.id}')" ${isChecked} class="w-4 h-4 rounded bg-slate-900 border-slate-700 accent-indigo-600 cursor-pointer">
             </td>
-            <td class="p-4 font-semibold text-slate-200">${item.isFolder ? '📁 ' + item.name : '📄 ' + item.name}</td>
+            <td class="p-4 font-semibold text-slate-200 flex items-center gap-2">
+              <span>${item.isFolder ? '📁' : '📄'}</span>
+              <span class="truncate max-w-xs sm:max-w-md">${escapeHtml(item.name)}</span>
+            </td>
             <td class="p-4 text-slate-400 text-xs">${item.isFolder ? '--' : formatBytes(item.size)}</td>
-            <td class="p-4 text-slate-400 text-xs">${item.date}</td>
-            <td class="p-4 text-right space-x-1.5">
+            <td class="p-4 text-slate-400 text-xs">${item.date || '--'}</td>
+            <td class="p-4 text-right space-x-1">
               ${item.isFolder 
-                ? `<button onclick="openFolder('${item.id}')" class="bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 border border-amber-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold">📂 Mở</button>`
-                : `<button onclick="previewFile('${item.id}')" class="bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold">👁️ Xem</button>
-                   <button onclick="downloadSingleFile('${item.id}')" class="bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 px-2.5 py-1.5 rounded-xl text-xs font-semibold">📥 Tải</button>`
+                ? `<button onclick="openFolder('${item.id}')" class="bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 border border-amber-500/30 px-2 py-1 rounded-lg text-xs font-semibold">📂 Mở</button>`
+                : `<button onclick="previewFile('${item.id}')" class="bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 px-2 py-1 rounded-lg text-xs font-semibold">👁️ Xem</button>
+                   <button onclick="downloadSingleFile('${item.id}')" class="bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 px-2 py-1 rounded-lg text-xs font-semibold">📥 Tải</button>`
               }
-              <button onclick="deleteSingleItem('${item.id}')" class="bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 px-2 py-1.5 rounded-xl text-xs font-semibold">🗑️</button>
+              <button onclick="renameItem('${item.id}')" class="bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/30 px-2 py-1 rounded-lg text-xs font-semibold">✏️ Đổi tên</button>
+              <button onclick="openMoveModal('${item.id}')" class="bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 border border-amber-500/30 px-2 py-1 rounded-lg text-xs font-semibold">🚚 Di chuyển</button>
+              <button onclick="deleteSingleItem('${item.id}')" class="bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 px-2 py-1 rounded-lg text-xs font-semibold">🗑️</button>
             </td>
           </tr>`;
       }).join('');
@@ -623,7 +776,7 @@
         }).join('');
 
       } catch (err) {
-        container.innerHTML = `<div class="text-center py-6 text-rose-400 text-xs">❌ Lỗi kết nối Google Sheet!</div>`;
+        container.innerHTML = `<div class="text-center py-6 text-rose-400 text-xs">❌ Lỗi kết nối hệ thống sao lưu!</div>`;
       }
     }
 
@@ -640,7 +793,7 @@
           if (confirm(`Khôi phục ${importedData.length} mục từ bản sao lưu này?`)) {
             dbFiles = importedData;
             renderBreadcrumb();
-            renderFiles(getCurrentFolderItems());
+            applyFilters();
             updateStorageUsage();
             closeBackupModal();
             alert("🎉 Khôi phục dữ liệu thành công!");
@@ -654,7 +807,7 @@
     function deleteSingleItem(id) {
       dbFiles = dbFiles.filter(f => f.id !== id);
       selectedFileIds.delete(id);
-      renderFiles(getCurrentFolderItems());
+      applyFilters();
       updateStorageUsage();
       manualBackupToSheet();
     }
