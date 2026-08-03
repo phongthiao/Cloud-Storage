@@ -223,7 +223,7 @@ app.post('/api/pin-db', async (req, res, next) => {
   }
 });
 
-// 6. API Xuất Sao Lưu Cloud Sheet
+// 6. API Xuất Sao Lưu Cloud Sheeet
 app.post('/api/save-backup', async (req, res, next) => {
   try {
     await axios.post(BACKUP_SCRIPT_URL, req.body, {
