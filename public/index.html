@@ -218,7 +218,7 @@
     <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-700 pb-3">
         <h3 class="text-lg font-bold text-purple-400 flex items-center gap-2">
-          📜 3 Bản Sao Lưu Mới Nhất
+          📜 Các Bản Sao Lưu Mới Nhất
         </h3>
         <button onclick="closeBackupModal()" class="text-slate-400 hover:text-white text-xl">&times;</button>
       </div>
@@ -233,10 +233,12 @@
 
   <script>
     const AUTH_API_URL = "/api/login";
-    const BACKUP_SCRIPT_URL = "/api/backup";
+    
+    // 🛑 ĐÃ CẬP NHẬT ĐƯỜNG DẪN APPS SCRIPT DỰ PHÒNG GOOGLE SHEET MỚI
+    const BACKUP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby1cykTfz4jerGHDsm8Udjco2EfZMbDYTQ8PTDjXXjyQmDRAejx1N5vA-jKpnmLupqlBw/exec";
 
     const CHUNK_SIZE = 10 * 1024 * 1024; // Cố định 10MB mỗi mảnh
-    const MAX_CACHE_SIZE = 5; // CẢI TIẾN FRONTEND: Giới hạn tối đa 5 file cache trong RAM trình duyệt
+    const MAX_CACHE_SIZE = 5; // Giới hạn tối đa 5 file cache trong RAM trình duyệt
 
     let CURRENT_MTB = localStorage.getItem('cur_mtb') || null;
     let BOT_TOKEN = localStorage.getItem('cur_token') || null;
@@ -393,7 +395,7 @@
           })
         });
       } catch (err) {
-        console.error("Lỗi sao lưu lên Cloud Drive:", err);
+        console.error("Lỗi sao lưu lên Cloud Sheet:", err);
       }
     }
 
@@ -594,7 +596,6 @@
       });
     }
 
-    // CẢI TIẾN FRONTEND: Tải Mảnh Song Song bằng Promise.all() (Nhanh gấp 3–5 lần)
     async function fetchFileBlobFromItem(item, onProgress) {
       const chunkIds = item.chunks || [item.id];
       let loadedCount = 0;
@@ -612,7 +613,6 @@
 
       const results = await Promise.all(downloadPromises);
 
-      // Đảm bảo ghép đúng thứ tự ban đầu
       results.sort((a, b) => a.index - b.index);
       const blobs = results.map(r => r.blob);
 
@@ -644,7 +644,6 @@
             statusText.innerText = `📥 Tải song song các mảnh (${current}/${total}): ${item.name}`;
           });
 
-          // CẢI TIẾN FRONTEND: Giới hạn Cache tối đa 5 file gần nhất
           if (previewCache.size >= MAX_CACHE_SIZE) {
             const oldestKey = previewCache.keys().next().value;
             previewCache.delete(oldestKey);
@@ -673,7 +672,6 @@
       }
     }
 
-    // Xem trước File (Đã tích hợp giới hạn Max 5 File Cache)
     async function previewFile(itemId) {
       const item = dbFiles.find(f => f.id === itemId);
       if (!item) return;
@@ -697,7 +695,6 @@
         try {
           fullBlob = await fetchFileBlobFromItem(item);
 
-          // CẢI TIẾN FRONTEND: Xóa cache cũ nếu vượt quá 5 file để bảo vệ RAM trình duyệt
           if (previewCache.size >= MAX_CACHE_SIZE) {
             const oldestKey = previewCache.keys().next().value;
             previewCache.delete(oldestKey);
