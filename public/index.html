@@ -234,8 +234,8 @@
   <script>
     const AUTH_API_URL = "/api/login";
     
-    // 🛑 ĐÃ CẬP NHẬT ĐƯỜNG DẪN APPS SCRIPT DỰ PHÒNG GOOGLE SHEET MỚI
-    const BACKUP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby1cykTfz4jerGHDsm8Udjco2EfZMbDYTQ8PTDjXXjyQmDRAejx1N5vA-jKpnmLupqlBw/exec";
+    // 🛑 ĐÃ CẬP NHẬT ĐƯỜNG DẪN WEB APP GOOGLE SHEET SAO LƯU MỚI
+    const BACKUP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw0EdS-qSOA2PpemKa2sdZ4QghxdikvXreCvuWwAfK_Q-nIGDg-9No0qLHfiLb3kyWFbQ/exec";
 
     const CHUNK_SIZE = 10 * 1024 * 1024; // Cố định 10MB mỗi mảnh
     const MAX_CACHE_SIZE = 5; // Giới hạn tối đa 5 file cache trong RAM trình duyệt
@@ -329,12 +329,12 @@
     async function autoFetchLatestBackupOnStart() {
       if (!CURRENT_MTB) return;
       try {
-        const res = await fetch(`${BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(CURRENT_MTB)}`);
+        const res = await fetch(`${BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(CURRENT_MTB)}&t=${Date.now()}`);
         const listData = await res.json();
 
         if (listData && listData.length > 0) {
           const latestItem = listData[listData.length - 1];
-          const fullJsonData = (latestItem.mainData || "") + (latestItem.subData || "") || latestItem.backupData;
+          const fullJsonData = latestItem.mainData || latestItem.backupData;
           
           if (fullJsonData) {
             dbFiles = typeof fullJsonData === 'string' ? JSON.parse(fullJsonData) : fullJsonData;
@@ -384,14 +384,13 @@
       if (!CURRENT_MTB) return;
       const currentTimeStr = new Date().toLocaleString('vi-VN');
       try {
-        await fetch('/api/save-backup', {
+        await fetch(BACKUP_SCRIPT_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({
             mtb: CURRENT_MTB,
             time: currentTimeStr,
-            backupData: JSON.stringify(dbFiles),
-            overwrite: false
+            backupData: JSON.stringify(dbFiles)
           })
         });
       } catch (err) {
@@ -931,25 +930,25 @@
       container.innerHTML = `<div class="text-center py-6 text-amber-400 text-xs font-semibold">⏳ Đang lấy danh sách bản sao lưu...</div>`;
 
       try {
-        const res = await fetch(`${BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(CURRENT_MTB)}`);
+        const res = await fetch(`${BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(CURRENT_MTB)}&t=${Date.now()}`);
         const listData = await res.json();
 
         if (!listData || listData.length === 0) {
-          container.innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">Tài khoản này chưa có bản sao lưu nào.</div>`;
+          container.innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">Tài khoản này chưa có bản sao lưu nào trên Google Sheet.</div>`;
           return;
         }
 
-        const recent3Backups = listData.slice(-3).reverse();
+        const recentBackups = listData.slice().reverse();
 
-        container.innerHTML = recent3Backups.map((item, index) => {
-          const fullJsonData = (item.mainData || "") + (item.subData || "") || item.backupData;
+        container.innerHTML = recentBackups.map((item, index) => {
+          const fullJsonData = item.mainData || item.backupData;
           const encodedData = encodeURIComponent(fullJsonData);
           
           return `
             <div class="bg-slate-900 border border-purple-500/30 p-3.5 rounded-xl space-y-2.5">
               <div class="flex items-center justify-between">
                 <div>
-                  <div class="text-xs font-bold text-slate-100">🕒 Bản lưu #${recent3Backups.length - index}: ${item.time}</div>
+                  <div class="text-xs font-bold text-slate-100">🕒 ${item.time}</div>
                 </div>
                 <span class="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded border border-purple-500/30">
                   MTB: ${CURRENT_MTB}
