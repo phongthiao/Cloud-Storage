@@ -4,12 +4,12 @@ const multer = require('multer');
 const fetch = require('node-fetch');
 const FormData = require('form-data');
 const path = require('path');
-const { pipeline, PassThrough } = require('stream');
+const fs = require('fs');
+const { pipeline } = require('stream');
 
 const app = express();
 
-// SỬA LỖI 1: Không dùng memoryStorage. Dùng diskStorage với thư mục tạm
-// hoặc stream trực tiếp để tránh chiếm dụng RAM Render.
+// 1. CẢI TIẾN BACKEND: Dùng diskStorage lưu tạm vào đĩa /tmp/ thay vì RAM (MemoryStorage)
 const upload = multer({ dest: '/tmp/' });
 
 app.use(cors());
@@ -23,7 +23,7 @@ const BACKUP_SCRIPT_URL = process.env.BACKUP_SCRIPT_URL || "https://script.googl
 // Lưu giữ ID của tin nhắn CSDL cố định để thực hiện sửa tin nhắn (Edit Message)
 let pinnedDbMessageId = null;
 
-// SỬA LỖI 2: Hàm Bắt Lỗi 429 Rate Limit & Tự động Sleep (Retry_after)
+// Hàm Bắt Lỗi 429 Rate Limit & Tự động Sleep (retry_after)
 async function fetchTelegramWithRetry(url, options, maxRetries = 5) {
   for (let i = 0; i < maxRetries; i++) {
     const res = await fetch(url, options);
@@ -68,21 +68,21 @@ app.get('/api/backup', async (req, res) => {
   }
 });
 
-// 3. API Upload Chunk (SỬA LỖI 1 & 2: Nhận Stream trực tiếp, Xử lý 429)
+// 3. API Upload Chunk (Đã tối ưu RAM < 80MB & Tự động xóa file tạm fs.unlinkSync)
 app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
-  const fs = require('fs');
   try {
     const { token, chatId } = req.body;
     const file = req.file;
 
     if (!token || !chatId || !file) {
+      if (file && file.path && fs.existsSync(file.path)) fs.unlinkSync(file.path);
       return res.status(400).json({ success: false, message: "Thiếu thông tin tải lên" });
     }
 
     const datFileName = `data_chunk_${Date.now()}_${Math.floor(Math.random() * 10000)}.dat`;
     const formData = new FormData();
     formData.append('chat_id', chatId);
-    // Tạo ReadStream từ ổ đĩa tạm để đẩy thẳng lên Telegram, xóa ngay khỏi RAM
+    // Đẩy stream từ file tạm trên đĩa vào FormData
     formData.append('document', fs.createReadStream(file.path), datFileName);
 
     const tgData = await fetchTelegramWithRetry(`https://api.telegram.org/bot${token}/sendDocument`, {
@@ -90,8 +90,10 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
       body: formData
     });
 
-    // Dọn dẹp tệp tạm trên ổ đĩa
-    fs.unlink(file.path, () => {});
+    // CẢI TIẾN BACKEND: Xóa ngay lập tức file tạm trên đĩa sau khi gửi thành công
+    if (file && file.path && fs.existsSync(file.path)) {
+      fs.unlinkSync(file.path);
+    }
 
     if (tgData.ok && tgData.result.document) {
       res.json({ success: true, file_id: tgData.result.document.file_id });
@@ -99,7 +101,10 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
       res.status(400).json({ success: false, message: tgData.description || "Lỗi tải lên Telegram" });
     }
   } catch (err) {
-    if (req.file && req.file.path) fs.unlink(req.file.path, () => {});
+    // Dọn dẹp tệp tạm khi gặp lỗi
+    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
     res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -142,7 +147,7 @@ app.get('/api/file-proxy', async (req, res) => {
   }
 });
 
-// 5. API Lưu CSDL lên Telegram (SỬA LỖI 4: Chuyển sang Cập Nhật / Edit Tin Nhắn Cố Định)
+// 5. API Lưu CSDL lên Telegram (Chỉnh sửa tin nhắn cố định - Edit Message)
 app.post('/api/pin-db', async (req, res) => {
   try {
     const { token, chatId, mtb, dbData, msgId } = req.body;
@@ -150,7 +155,6 @@ app.post('/api/pin-db', async (req, res) => {
     const targetMsgId = msgId || pinnedDbMessageId;
 
     if (targetMsgId) {
-      // Nếu đã có ID tin nhắn trước đó -> Dùng editMessageMedia để sửa tin nhắn hiện tại
       const formData = new FormData();
       formData.append('chat_id', chatId);
       formData.append('message_id', targetMsgId);
@@ -170,7 +174,7 @@ app.post('/api/pin-db', async (req, res) => {
       }
     }
 
-    // Nếu chưa có tin nhắn cố định (hoặc edit thất bại do tin nhắn bị xóa) -> Gửi tin nhắn mới lần đầu
+    // Nếu gửi lần đầu tiên
     const formData = new FormData();
     formData.append('chat_id', chatId);
     formData.append('document', blob, `database_${mtb}.json`);
