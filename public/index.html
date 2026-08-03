@@ -6,7 +6,7 @@
   <title>Cloud Storage - Ultimate Edition</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen p-4 sm:p-6 font-sans select-none">
+<body class="bg-slate-900 text-slate-100 min-h-screen p-4 sm:p-6 font-sans select-none" id="dropZone">
   
   <!-- MÀN HÌNH ĐĂNG NHẬP -->
   <div id="loginScreen" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center z-50 p-4">
@@ -36,6 +36,14 @@
     </div>
   </div>
 
+  <!-- OVERLAY HIỆU ỨNG KÉO THẢ FILE -->
+  <div id="dragOverlay" class="fixed inset-0 bg-indigo-600/20 backdrop-blur-sm border-4 border-dashed border-indigo-400 z-40 flex items-center justify-center hidden pointer-events-none">
+    <div class="text-center space-y-2 bg-slate-900/90 p-8 rounded-2xl border border-indigo-500 shadow-2xl">
+      <div class="text-6xl animate-bounce">📥</div>
+      <p class="text-lg font-bold text-indigo-300">Thả tệp vào đây để tải lên ngay</p>
+    </div>
+  </div>
+
   <!-- GIAO DIỆN CHÍNH -->
   <div class="max-w-6xl mx-auto space-y-6">
     
@@ -44,7 +52,7 @@
       <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
           <h1 class="text-2xl font-bold text-indigo-400 flex items-center gap-2">⚡ Cloud Storage Pro</h1>
-          <p class="text-xs text-slate-400 mt-1">Tải song song tốc độ cao • Quản lý kho tệp thông minh</p>
+          <p class="text-xs text-slate-400 mt-1">Tải song song tốc độ cao • Hỗ trợ Kéo - Thả • Tải siêu mượt</p>
         </div>
         
         <div class="flex flex-wrap items-center gap-2">
@@ -83,7 +91,7 @@
           ➕ Tạo Thư Mục
         </button>
 
-        <input type="file" id="fileInput" multiple class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 bg-slate-900 rounded-xl border border-slate-700 p-1 cursor-pointer" onchange="startBatchUploadQueue()">
+        <input type="file" id="fileInput" multiple class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 bg-slate-900 rounded-xl border border-slate-700 p-1 cursor-pointer" onchange="handleFileSelect(event)">
       </div>
 
       <!-- Thanh Tiến Trình -->
@@ -226,8 +234,6 @@
 
   <script>
     let CURRENT_MTB = localStorage.getItem('cur_mtb') || null;
-    let BOT_TOKEN = localStorage.getItem('cur_token') || null;
-    let CHAT_ID = localStorage.getItem('cur_chatid') || null;
     let MAX_STORAGE_GB = localStorage.getItem('cur_max_gb') ? parseFloat(localStorage.getItem('cur_max_gb')) : 5;
 
     let dbFiles = [];
@@ -240,14 +246,41 @@
     const MAX_PREVIEW_CACHE = 5;
 
     const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB/chunk phù hợp với Telegram Bot API
+    const CONCURRENCY_LIMIT = 4; // Tối đa 4 luồng tải song song cùng lúc chống 429 Rate Limit
 
     window.onload = async () => {
-      if (CURRENT_MTB && BOT_TOKEN && CHAT_ID) {
+      setupDragAndDrop();
+      if (CURRENT_MTB) {
         document.getElementById('loginScreen').classList.add('hidden');
         document.getElementById('userInfoBadge').innerText = `Thiết bị: ${CURRENT_MTB}`;
         await autoFetchLatestBackupOnStart();
       }
     };
+
+    // TÍCH HỢP TÍNH NĂNG KÉO THẢ FILE (DRAG AND DROP)
+    function setupDragAndDrop() {
+      const dropZone = document.getElementById('dropZone');
+      const dragOverlay = document.getElementById('dragOverlay');
+
+      window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dragOverlay.classList.remove('hidden');
+      });
+
+      window.addEventListener('dragleave', (e) => {
+        if (e.clientX <= 0 || e.clientY <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
+          dragOverlay.classList.add('hidden');
+        }
+      });
+
+      window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dragOverlay.classList.add('hidden');
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          startBatchUploadQueue(Array.from(e.dataTransfer.files));
+        }
+      });
+    }
 
     async function loginWithCloud() {
       const mtb = document.getElementById('inputMTB').value.trim().toUpperCase();
@@ -269,14 +302,10 @@
         const data = await res.json();
 
         if (data.success) {
-          CURRENT_MTB = mtb;
-          BOT_TOKEN = data.token;
-          CHAT_ID = data.chatId;
+          CURRENT_MTB = data.mtb;
           MAX_STORAGE_GB = data.maxGb || 5;
 
           localStorage.setItem('cur_mtb', CURRENT_MTB);
-          localStorage.setItem('cur_token', BOT_TOKEN);
-          localStorage.setItem('cur_chatid', CHAT_ID);
           localStorage.setItem('cur_max_gb', MAX_STORAGE_GB);
 
           document.getElementById('loginScreen').classList.add('hidden');
@@ -339,11 +368,14 @@
       }
     }
 
+    function handleFileSelect(e) {
+      const files = Array.from(e.target.files);
+      if (files.length > 0) startBatchUploadQueue(files);
+    }
+
     // UPLOAD TỆP CHIA MẢNH CHỐNG TRÀN RAM
-    async function startBatchUploadQueue() {
-      const input = document.getElementById('fileInput');
-      const files = Array.from(input.files);
-      if (files.length === 0) return;
+    async function startBatchUploadQueue(files) {
+      if (!files || files.length === 0) return;
 
       const progressModal = document.getElementById('progressModal');
       const progressBar = document.getElementById('progressBar');
@@ -368,8 +400,6 @@
           percentText.innerText = `${percent}%`;
 
           const formData = new FormData();
-          formData.append('token', BOT_TOKEN);
-          formData.append('chatId', CHAT_ID);
           formData.append('document', chunkBlob, `${file.name}.part${c}`);
 
           const res = await fetch('/api/upload-chunk', { method: 'POST', body: formData });
@@ -401,25 +431,48 @@
       updateStorageUsage();
       await manualBackupToSheet();
 
-      input.value = '';
+      document.getElementById('fileInput').value = '';
       progressModal.classList.add('hidden');
     }
 
-    // TẢI SONG SONG CÁC MẢNH FILE DÙNG PROMISE.ALL TĂNG TỐC TỐI ĐA
+    // THUẬT TOÁN DOWNLOADING CONCURRENCY QUEUE (TẢI TỐI ĐA 4 LUỒNG CHỐNG RATE LIMIT 429)
+    async function fetchChunksWithLimit(chunks, filename, limit = CONCURRENCY_LIMIT) {
+      const results = new Array(chunks.length);
+      let executing = [];
+      let index = 0;
+
+      for (let i = 0; i < chunks.length; i++) {
+        const chunkId = chunks[i];
+        const proxyUrl = `/api/file-proxy?fileId=${encodeURIComponent(chunkId)}&filename=${encodeURIComponent(filename)}`;
+        
+        const p = fetch(proxyUrl)
+          .then(r => {
+            if (!r.ok) throw new Error("Lỗi mảnh file");
+            return r.blob();
+          })
+          .then(blob => {
+            results[i] = blob;
+          });
+
+        executing.push(p);
+
+        if (executing.length >= limit) {
+          await Promise.race(executing);
+          executing = executing.filter(item => item !== p);
+        }
+      }
+
+      await Promise.all(executing);
+      return results;
+    }
+
+    // TẢI FILE SỬ DỤNG LUỒNG GIỚI HẠN
     async function fetchFileBlobFromItem(item) {
       if (previewCache.has(item.id)) {
         return previewCache.get(item.id);
       }
 
-      const downloadPromises = item.chunks.map(fileId => {
-        const proxyUrl = `/api/file-proxy?token=${encodeURIComponent(BOT_TOKEN)}&fileId=${encodeURIComponent(fileId)}&filename=${encodeURIComponent(item.name)}`;
-        return fetch(proxyUrl).then(r => {
-          if (!r.ok) throw new Error("Lỗi mảnh file");
-          return r.blob();
-        });
-      });
-
-      const blobParts = await Promise.all(downloadPromises);
+      const blobParts = await fetchChunksWithLimit(item.chunks, item.name, CONCURRENCY_LIMIT);
       const fullBlob = new Blob(blobParts, { type: getMimeType(item.name) });
       const objectUrl = URL.createObjectURL(fullBlob);
 
@@ -444,7 +497,7 @@
 
       modal.classList.remove('hidden');
       title.innerText = `📄 Xem trước: ${item.name}`;
-      body.innerHTML = `<div class="text-center text-indigo-400 text-sm animate-pulse">⏳ Đang tải song song các mảnh file...</div>`;
+      body.innerHTML = `<div class="text-center text-indigo-400 text-sm animate-pulse">⏳ Đang tải an toàn các mảnh file (tối đa 4 luồng)...</div>`;
 
       try {
         const objectUrl = await fetchFileBlobFromItem(item);
