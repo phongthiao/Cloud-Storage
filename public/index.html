@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cloud Storage Pro - Stable Streaming</title>
+  <title>Cloud Storage Pro - Zero-RAM Leak</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen p-4 sm:p-6 font-sans select-none" id="dropZone">
@@ -44,6 +44,9 @@
     </div>
   </div>
 
+  <!-- THÔNG BÁO TẢI TỆP XUỐNG DƯỚI GÓC MÀN HÌNH (TOAST NOTIFICATION) -->
+  <div id="downloadToastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
   <!-- GIAO DIỆN CHÍNH -->
   <div class="max-w-6xl mx-auto space-y-6">
     
@@ -52,7 +55,7 @@
       <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
           <h1 class="text-2xl font-bold text-indigo-400 flex items-center gap-2">⚡ Cloud Storage Pro</h1>
-          <p class="text-xs text-slate-400 mt-1">Hệ thống lưu trữ phân mảnh • Khắc phục lỗi Chunk</p>
+          <p class="text-xs text-slate-400 mt-1">Hệ thống lưu trữ phân mảnh • Khắc phục triệt để tràn RAM</p>
         </div>
         
         <div class="flex flex-wrap items-center gap-2">
@@ -246,8 +249,8 @@
     let selectedFileIds = new Set();
     let moveTargetItemIds = [];
 
-    const previewCache = new Map();
-    const MAX_PREVIEW_CACHE = 5;
+    // Lưu trữ URL Blob tạm thời của Modal Preview để thu hồi RAM khi đóng
+    let activePreviewObjectUrl = null;
 
     const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -489,10 +492,10 @@
       progressModal.classList.add('hidden');
     }
 
-    // TẢI CHUNK SONG SONG (CONCURRENCY CONTROL - MAXIMUM 3 REQS)
-    async function fetchChunksWithLimit(chunks, filename, progressCallback) {
+    // TẢI CHUNK VÀ TỰ ĐỘNG GIẢI PHÓNG BỘ NHỚ RAM (CÓ TIMEOUT PROXY)
+    async function fetchChunksControlled(chunks, filename, progressCallback) {
       const results = new Array(chunks.length);
-      const CONCURRENCY = 3;
+      const CONCURRENCY = 2; // Giảm xuống 2 luồng song song để ổn định kết nối cho Video nặng
       let completedCount = 0;
 
       const fetchSingleChunk = async (index) => {
@@ -501,14 +504,21 @@
         
         let downloadedBlob = null;
         for (let attempt = 1; attempt <= 3; attempt++) {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 giây timeout chống treo
+
           try {
             const res = await fetch(proxyUrl, {
-              headers: { 'Authorization': `Bearer ${SESSION_TOKEN}` }
+              headers: { 'Authorization': `Bearer ${SESSION_TOKEN}` },
+              signal: controller.signal
             });
-            if (!res.ok) throw new Error(`HTTP Status ${res.status}`);
+            clearTimeout(timeoutId);
+
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             downloadedBlob = await res.blob();
             break; 
           } catch (err) {
+            clearTimeout(timeoutId);
             await new Promise(r => setTimeout(r, 1000 * attempt));
           }
         }
@@ -522,20 +532,14 @@
         if (progressCallback) progressCallback(completedCount, chunks.length);
       };
 
-      const queue = [];
-      for (let i = 0; i < chunks.length; i++) {
-        const task = fetchSingleChunk(i);
-        queue.push(task);
-
-        if (queue.length >= CONCURRENCY) {
-          await Promise.race(queue);
-          for (let j = queue.length - 1; j >= 0; j--) {
-            // Dọn dẹp task đã hoàn thành
-          }
+      for (let i = 0; i < chunks.length; i += CONCURRENCY) {
+        const batch = [];
+        for (let j = i; j < i + CONCURRENCY && j < chunks.length; j++) {
+          batch.push(fetchSingleChunk(j));
         }
+        await Promise.all(batch);
       }
 
-      await Promise.all(queue);
       return results;
     }
 
@@ -554,39 +558,100 @@
       return mimeTypes[ext] || 'application/octet-stream';
     }
 
-    async function fetchFileBlobFromItem(item, progressCallback) {
-      if (previewCache.has(item.id)) {
-        return previewCache.get(item.id);
+    // TẢI TỆP TRỰC TIẾP VÀ HIỆN THÔNG BÁO XUỐNG MÀN HÌNH - XÓA RAM TRIỆT ĐỂ
+    async function downloadSingleFile(id) {
+      const item = dbFiles.find(f => f.id === id);
+      if (!item || item.isFolder) return;
+
+      const toastId = "toast_" + Date.now();
+      showToastNotification(toastId, item.name);
+
+      try {
+        const blobParts = await fetchChunksControlled(item.chunks, item.name, (current, total) => {
+          updateToastProgress(toastId, current, total);
+        });
+
+        const fileMime = getMimeType(item.name);
+        const fullBlob = new Blob(blobParts, { type: fileMime });
+        
+        // Dọn dẹp mảng Blob Parts ngay sau khi gộp để trả bộ nhớ RAM
+        for (let i = 0; i < blobParts.length; i++) {
+          blobParts[i] = null;
+        }
+
+        const objectUrl = URL.createObjectURL(fullBlob);
+        
+        // Tạo liên kết tải xuống tự động xuống góc trình duyệt
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = item.name;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        
+        // GIẢI PHÓNG RAM VÀ XOÁ OBJETURL NGAY SAU KHI CLICK TẢI
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(objectUrl);
+        }, 1000);
+
+        finishToastNotification(toastId, true);
+
+      } catch (err) {
+        finishToastNotification(toastId, false, err.message);
       }
-
-      if (!item.chunks || item.chunks.length === 0) {
-        throw new Error("Tệp không tìm thấy mảnh Chunk!");
-      }
-
-      const blobParts = await fetchChunksWithLimit(item.chunks, item.name, progressCallback);
-      
-      const totalDownloadedBytes = blobParts.reduce((sum, b) => sum + (b ? b.size : 0), 0);
-      if (item.size && totalDownloadedBytes < item.size * 0.95) {
-        throw new Error(`Dữ liệu không đầy đủ! Đã tải ${formatBytes(totalDownloadedBytes)} / ${formatBytes(item.size)}.`);
-      }
-
-      const fileMime = getMimeType(item.name);
-      const fullBlob = new Blob(blobParts, { type: fileMime });
-      const objectUrl = URL.createObjectURL(fullBlob);
-
-      if (previewCache.size >= MAX_PREVIEW_CACHE) {
-        const oldestKey = previewCache.keys().next().value;
-        URL.revokeObjectURL(previewCache.get(oldestKey));
-        previewCache.delete(oldestKey);
-      }
-
-      previewCache.set(item.id, objectUrl);
-      return objectUrl;
     }
 
+    // TẠO THÔNG BÁO GÓC MÀN HÌNH (TOAST)
+    function showToastNotification(id, filename) {
+      const container = document.getElementById('downloadToastContainer');
+      const toast = document.createElement('div');
+      toast.id = id;
+      toast.className = "bg-slate-800 border border-indigo-500/40 p-3 rounded-xl shadow-2xl pointer-events-auto space-y-2 transition-all duration-300";
+      toast.innerHTML = `
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-xs font-semibold text-indigo-300 truncate max-w-[200px]">📥 ${escapeHtml(filename)}</span>
+          <span class="text-[10px] text-emerald-400 font-mono font-bold toast-percent">0%</span>
+        </div>
+        <div class="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden border border-slate-700">
+          <div class="bg-indigo-500 h-full w-0 transition-all duration-150 toast-bar"></div>
+        </div>
+      `;
+      container.appendChild(toast);
+    }
+
+    function updateToastProgress(id, current, total) {
+      const toast = document.getElementById(id);
+      if (!toast) return;
+      const percent = Math.round((current / total) * 100);
+      toast.querySelector('.toast-percent').innerText = `${percent}%`;
+      toast.querySelector('.toast-bar').style.width = `${percent}%`;
+    }
+
+    function finishToastNotification(id, success, errorMsg = "") {
+      const toast = document.getElementById(id);
+      if (!toast) return;
+
+      if (success) {
+        toast.className = "bg-emerald-950/80 border border-emerald-500/40 p-3 rounded-xl shadow-2xl pointer-events-auto transition-all duration-300";
+        toast.innerHTML = `<div class="text-xs font-semibold text-emerald-300">✅ Đã tải xuống thành công & giải phóng RAM!</div>`;
+      } else {
+        toast.className = "bg-rose-950/80 border border-rose-500/40 p-3 rounded-xl shadow-2xl pointer-events-auto transition-all duration-300";
+        toast.innerHTML = `<div class="text-xs font-semibold text-rose-300">❌ Lỗi: ${escapeHtml(errorMsg)}</div>`;
+      }
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    // MODAL PREVIEW TỆP VỚI KHẢ NĂNG THU HỒI RAM THÔNG MINH
     async function previewFile(id) {
       const item = dbFiles.find(f => f.id === id);
       if (!item || item.isFolder) return;
+
+      closePreviewModal(); // Đảm bảo dọn dẹp RAM của lần preview trước
 
       const modal = document.getElementById('previewModal');
       const title = document.getElementById('previewTitle');
@@ -599,34 +664,42 @@
         body.innerHTML = `
           <div class="text-center space-y-3">
             <div class="text-4xl animate-bounce">⏳</div>
-            <p class="text-indigo-400 text-sm font-semibold">Đang tải và ổn định luồng dữ liệu Video...</p>
-            <p class="text-xs text-emerald-400 font-mono font-bold">Đã tải mảnh: ${current} / ${total}</p>
+            <p class="text-indigo-400 text-sm font-semibold">Đang nạp luồng dữ liệu tệp...</p>
+            <p class="text-xs text-emerald-400 font-mono font-bold">Mảnh: ${current} / ${total}</p>
           </div>`;
       };
 
       try {
-        const objectUrl = await fetchFileBlobFromItem(item, updateStatus);
+        const blobParts = await fetchChunksControlled(item.chunks, item.name, updateStatus);
+        const fileMime = getMimeType(item.name);
+        const fullBlob = new Blob(blobParts, { type: fileMime });
+
+        // Dọn dẹp mảng phụ ngay lập tức
+        for (let i = 0; i < blobParts.length; i++) {
+          blobParts[i] = null;
+        }
+
+        activePreviewObjectUrl = URL.createObjectURL(fullBlob);
         const ext = getFileExtension(item.name);
-        const mimeType = getMimeType(item.name);
 
         if (['mp4', 'webm', 'mkv', 'mov'].includes(ext)) {
           body.innerHTML = `
             <video controls autoplay playsinline class="max-h-[75vh] w-full rounded-xl shadow-2xl bg-black">
-              <source src="${objectUrl}" type="${mimeType}">
+              <source src="${activePreviewObjectUrl}" type="${fileMime}">
               Trình duyệt không hỗ trợ phát Video này.
             </video>`;
         } else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
-          body.innerHTML = `<img src="${objectUrl}" class="max-h-[75vh] max-w-full rounded-lg object-contain shadow-md">`;
+          body.innerHTML = `<img src="${activePreviewObjectUrl}" class="max-h-[75vh] max-w-full rounded-lg object-contain shadow-md">`;
         } else if (['mp3', 'wav', 'ogg'].includes(ext)) {
           body.innerHTML = `
             <div class="p-6 bg-slate-900 rounded-2xl border border-slate-700 text-center space-y-4">
               <div class="text-5xl">🎵</div>
-              <audio src="${objectUrl}" controls autoplay class="w-full max-w-md mx-auto"></audio>
+              <audio src="${activePreviewObjectUrl}" controls autoplay class="w-full max-w-md mx-auto"></audio>
             </div>`;
         } else if (ext === 'pdf') {
-          body.innerHTML = `<iframe src="${objectUrl}" class="w-full h-[75vh] rounded-lg"></iframe>`;
+          body.innerHTML = `<iframe src="${activePreviewObjectUrl}" class="w-full h-[75vh] rounded-lg"></iframe>`;
         } else if (['txt', 'json', 'html', 'js', 'css', 'md', 'py', 'cpp', 'c'].includes(ext)) {
-          const textRes = await fetch(objectUrl);
+          const textRes = await fetch(activePreviewObjectUrl);
           const textContent = await textRes.text();
           body.innerHTML = `<pre class="bg-slate-900 p-4 rounded-lg text-xs text-slate-200 overflow-auto max-h-[75vh] w-full font-mono select-text">${escapeHtml(textContent)}</pre>`;
         } else {
@@ -656,25 +729,14 @@
         videoElem.src = "";
       }
       body.innerHTML = "";
-      document.getElementById('previewModal').classList.add('hidden');
-    }
 
-    async function downloadSingleFile(id) {
-      const item = dbFiles.find(f => f.id === id);
-      if (!item || item.isFolder) return;
-
-      try {
-        const objectUrl = await fetchFileBlobFromItem(item, (c, t) => {});
-        const a = document.createElement('a');
-        a.href = objectUrl;
-        a.download = item.name;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => document.body.removeChild(a), 100);
-      } catch (err) {
-        alert("❌ " + err.message);
+      // Giải phóng bộ nhớ RAM của Modal Preview ngay khi đóng
+      if (activePreviewObjectUrl) {
+        URL.revokeObjectURL(activePreviewObjectUrl);
+        activePreviewObjectUrl = null;
       }
+
+      document.getElementById('previewModal').classList.add('hidden');
     }
 
     async function downloadSelectedItems() {
@@ -683,7 +745,7 @@
 
       for (let i = 0; i < itemsToDownload.length; i++) {
         await downloadSingleFile(itemsToDownload[i].id);
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 600));
       }
     }
 
