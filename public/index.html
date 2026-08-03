@@ -3,190 +3,242 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cloud Storage System</title>
+  <title>Cloud Storage Pro - Zero-RAM Leak</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased relative overflow-x-hidden">
+<body class="bg-slate-900 text-slate-100 min-h-screen p-4 sm:p-6 font-sans select-none" id="dropZone">
+  
+  <!-- MÀN HÌNH ĐĂNG NHẬP -->
+  <div id="loginScreen" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center z-50 p-4">
+    <div class="bg-slate-800 p-6 sm:p-8 rounded-2xl border border-slate-700 max-w-md w-full space-y-4 shadow-2xl">
+      <div class="text-center space-y-1">
+        <div class="text-4xl">🔐</div>
+        <h2 class="text-xl font-bold text-indigo-400">Đăng Nhập Cloud Storage</h2>
+        <p class="text-xs text-slate-400">Hệ thống lưu trữ & sao lưu tự động</p>
+      </div>
+      
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Mã thiết bị (MTB):</label>
+          <input type="text" id="inputMTB" placeholder="Ví dụ: KH002" class="w-full bg-slate-900 border border-slate-700 text-sm px-4 py-2.5 rounded-xl outline-none focus:border-indigo-500 font-mono uppercase">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Mật khẩu (MK):</label>
+          <input type="password" id="inputMK" placeholder="Nhập mật khẩu..." class="w-full bg-slate-900 border border-slate-700 text-sm px-4 py-2.5 rounded-xl outline-none focus:border-indigo-500">
+        </div>
+      </div>
+      
+      <button onclick="loginWithCloud()" id="loginBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-xl transition shadow-lg shadow-indigo-600/30 flex justify-center items-center gap-2">
+        <span>🔑 Xác Thực Đăng Nhập</span>
+      </button>
 
-  <!-- OVERLAY KHI DRAG DROP -->
-  <div id="dragOverlay" class="fixed inset-0 bg-indigo-900/80 backdrop-blur-md z-50 hidden flex flex-col items-center justify-center border-4 border-dashed border-indigo-400 m-4 rounded-3xl pointer-events-none">
-    <div class="text-6xl mb-4 animate-bounce">📥</div>
-    <div class="text-2xl font-bold text-white">Thả tệp vào đây để tải lên!</div>
+      <div id="loginStatus" class="text-xs text-center font-medium hidden"></div>
+    </div>
   </div>
 
-  <!-- CONTAINER CHÍNH -->
-  <div class="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+  <!-- OVERLAY KÉO THẢ FILE -->
+  <div id="dragOverlay" class="fixed inset-0 bg-indigo-600/20 backdrop-blur-sm border-4 border-dashed border-indigo-400 z-40 flex items-center justify-center hidden pointer-events-none">
+    <div class="text-center space-y-2 bg-slate-900/90 p-8 rounded-2xl border border-indigo-500 shadow-2xl">
+      <div class="text-6xl animate-bounce">📥</div>
+      <p class="text-lg font-bold text-indigo-300">Thả tệp vào đây để tải lên ngay</p>
+    </div>
+  </div>
 
-    <!-- BAR THÔNG TIN TÀI KHOẢN & DUNG LƯỢNG -->
-    <div class="bg-slate-800/80 border border-slate-700/60 backdrop-blur-md p-4 rounded-2xl shadow-xl flex flex-col md:flex-row justify-between items-center gap-4">
-      <div class="flex items-center gap-3">
-        <span class="text-2xl">☁️</span>
+  <!-- THÔNG BÁO TẢI TỆP XUỐNG DƯỚI GÓC MÀN HÌNH (TOAST NOTIFICATION) -->
+  <div id="downloadToastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
+  <!-- GIAO DIỆN CHÍNH -->
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <div class="bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-700 space-y-4">
+      <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
-          <div id="userInfoBadge" class="font-bold text-slate-200 text-sm">Thiết bị: Chưa xác định</div>
-          <div class="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
-            <span id="storageUsageText">0 Bytes / 5 GB (0%)</span>
-          </div>
+          <h1 class="text-2xl font-bold text-indigo-400 flex items-center gap-2">⚡ Cloud Storage Pro</h1>
+          <p class="text-xs text-slate-400 mt-1">Hệ thống lưu trữ phân mảnh • Khắc phục triệt để tràn RAM</p>
+        </div>
+        
+        <div class="flex flex-wrap items-center gap-2">
+          <span id="userInfoBadge" class="text-xs bg-indigo-500/20 text-indigo-300 px-3 py-2 rounded-xl border border-indigo-500/30 font-mono">Thiết bị: ...</span>
+
+          <button onclick="manualBackupToSheet()" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-xl transition font-semibold flex items-center gap-1 shadow-lg shadow-emerald-600/20">
+            💾 Sao Lưu
+          </button>
+
+          <button onclick="exportBackupToFile()" class="text-xs bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-2 rounded-xl transition font-semibold flex items-center gap-1 shadow-lg shadow-cyan-600/20">
+            📤 Xuất Sao Lưu
+          </button>
+
+          <button onclick="document.getElementById('importBackupInput').click()" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-2 rounded-xl transition font-semibold flex items-center gap-1 shadow-lg shadow-amber-600/20">
+            📥 Nhập Sao Lưu
+          </button>
+          <input type="file" id="importBackupInput" accept=".json" class="hidden" onchange="importBackupFromFile(event)">
+
+          <button onclick="openBackupHistoryModal()" class="text-xs bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 px-3 py-2 rounded-xl transition font-semibold flex items-center gap-1">
+            📜 5 Bản Lưu Cloud
+          </button>
+
+          <button onclick="logout()" class="text-xs bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 px-3 py-2 rounded-xl transition">
+            🚪 Đăng Xuất
+          </button>
         </div>
       </div>
 
-      <!-- THANH DUNG LƯỢNG -->
-      <div class="w-full md:w-64 space-y-1">
-        <div class="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-700">
-          <div id="storageProgressBar" class="bg-indigo-500 h-full w-0 transition-all duration-300"></div>
+      <!-- Dung Lượng -->
+      <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700/60 space-y-2">
+        <div class="flex justify-between text-xs font-semibold">
+          <span class="text-slate-300">📊 Dung lượng sử dụng:</span>
+          <span id="storageUsageText" class="text-indigo-400 font-bold">Đang tải...</span>
         </div>
-      </div>
-
-      <div class="flex items-center gap-2">
-        <button onclick="openBackupHistoryModal()" class="bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 px-3 py-1.5 rounded-xl text-xs font-semibold transition">📜 Lịch sử lưu</button>
-        <button onclick="exportBackupToFile()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-xl text-xs font-semibold transition">📥 Xuất JSON</button>
-        <label class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition">
-          📤 Nhập JSON
-          <input type="file" accept=".json" onchange="importBackupFromFile(event)" class="hidden">
-        </label>
-        <button onclick="logout()" class="bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 px-3 py-1.5 rounded-xl text-xs font-semibold transition">🚪 Đăng xuất</button>
+        <div class="w-full bg-slate-800 h-3 rounded-full overflow-hidden border border-slate-700">
+          <div id="storageProgressBar" class="bg-gradient-to-r from-indigo-500 to-purple-500 h-full w-0 transition-all duration-300"></div>
+        </div>
       </div>
     </div>
 
-    <!-- THANH CÔNG CỤ THAO TÁC -->
-    <div class="bg-slate-800/80 border border-slate-700/60 backdrop-blur-md p-4 rounded-2xl shadow-xl space-y-4">
-      <div class="flex flex-wrap items-center gap-3">
-        <button onclick="createNewFolder()" class="bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs px-4 py-2.5 rounded-xl shadow-lg transition flex items-center gap-2">
-          <span>➕</span> Tạo Thư Mục
+    <!-- Khung Upload & Tạo Thư Mục -->
+    <div class="bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-700 space-y-4">
+      <div class="flex flex-col md:flex-row gap-3">
+        <button onclick="createNewFolder()" class="bg-amber-600 hover:bg-amber-500 text-white font-semibold px-4 py-2.5 rounded-xl transition shadow-lg shadow-amber-600/20 whitespace-nowrap flex items-center justify-center gap-2 text-sm">
+          ➕ Tạo Thư Mục
         </button>
 
-        <label class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs px-4 py-2.5 rounded-xl shadow-lg cursor-pointer transition flex items-center gap-2">
-          <span>📁</span> Chọn tệp
-          <input id="fileInput" type="file" multiple onchange="handleFileSelect(event)" class="hidden">
-        </label>
-
-        <!-- TOOLBAR CHỌN NHIỀU FILE -->
-        <div id="multiSelectActions" class="hidden flex items-center gap-2 pl-3 border-l border-slate-700">
-          <button onclick="downloadSelectedItems()" class="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-xs font-semibold">📥 Tải mục chọn</button>
-          <button onclick="openMoveModalForSelected()" class="bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-xl text-xs font-semibold">🚚 Di chuyển</button>
-          <button onclick="deleteSelectedItems()" class="bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 px-3 py-1.5 rounded-xl text-xs font-semibold">🗑️ Xóa</button>
-        </div>
+        <input type="file" id="fileInput" multiple class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 bg-slate-900 rounded-xl border border-slate-700 p-1 cursor-pointer" onchange="handleFileSelect(event)">
       </div>
 
-      <!-- THANH TIẾN TRÌNH UPLOAD (HỖ TRỢ HIỂN THỊ REALTIME) -->
-      <div id="progressModal" class="hidden bg-slate-900 border border-indigo-500/30 p-4 rounded-xl space-y-2">
-        <div class="flex justify-between items-center text-xs">
-          <span id="statusText" class="text-indigo-300 font-medium truncate max-w-md">Đang xử lý tệp...</span>
-          <span id="percentText" class="text-emerald-400 font-mono font-bold">0%</span>
+      <div id="progressModal" class="hidden bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3">
+        <div class="flex justify-between text-xs text-slate-300">
+          <span id="statusText" class="truncate max-w-md">Chuẩn bị...</span>
+          <span id="percentText" class="font-bold text-emerald-400">0%</span>
         </div>
-        <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden border border-slate-700">
+        <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden border border-slate-700">
           <div id="progressBar" class="bg-emerald-500 h-full w-0 transition-all duration-150"></div>
         </div>
       </div>
     </div>
 
-    <!-- DANH SÁCH TỆP & THƯ MỤC -->
-    <div class="bg-slate-800/80 border border-slate-700/60 backdrop-blur-md rounded-2xl shadow-xl overflow-hidden">
-      <!-- BREADCRUMB & LỌC -->
-      <div class="p-4 border-b border-slate-700/60 space-y-3">
-        <div id="breadcrumbBar" class="text-sm text-slate-300 flex items-center gap-2 flex-wrap font-medium">
-          <span class="font-bold text-indigo-400">🏠 Trang Chủ</span>
-        </div>
+    <!-- Bảng Danh Sách Tệp -->
+    <div class="bg-slate-800 rounded-2xl shadow-lg border border-slate-700 overflow-hidden space-y-2">
+      <div class="bg-slate-900/60 px-6 py-3 border-b border-slate-700 flex items-center gap-2 text-sm text-slate-300 overflow-x-auto" id="breadcrumbBar"></div>
 
-        <div class="flex flex-col sm:flex-row gap-3 justify-between items-center">
-          <div class="relative w-full sm:w-80">
-            <input id="searchInput" type="text" oninput="applyFilters()" placeholder="🔍 Tìm kiếm tệp hoặc thư mục..." class="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500">
-          </div>
-          <div class="flex items-center gap-2 w-full sm:w-auto">
-            <select id="typeFilter" onchange="applyFilters()" class="bg-slate-900/80 border border-slate-700 text-slate-300 text-xs rounded-xl px-3 py-2 focus:outline-none">
-              <option value="all">📁 Tất cả loại tệp</option>
-              <option value="folder">📂 Thư mục</option>
-              <option value="image">🖼️ Hình ảnh</option>
-              <option value="video">🎥 Video</option>
-              <option value="doc">📄 Tài liệu</option>
-            </select>
-            <select id="sortBy" onchange="applyFilters()" class="bg-slate-900/80 border border-slate-700 text-slate-300 text-xs rounded-xl px-3 py-2 focus:outline-none">
-              <option value="name_asc">🔤 Tên (A-Z)</option>
-              <option value="name_desc">🔤 Tên (Z-A)</option>
-              <option value="date_desc">🕒 Mới nhất</option>
-              <option value="date_asc">🕒 Cũ nhất</option>
-              <option value="size_desc">⚖️ Dung lượng giảm</option>
-              <option value="size_asc">⚖️ Dung lượng tăng</option>
-            </select>
-          </div>
+      <div class="p-4 border-b border-slate-700/60 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 bg-slate-800/50">
+        <div class="relative flex-1">
+          <input type="text" id="searchInput" oninput="applyFilters()" placeholder="🔍 Tìm kiếm tệp hoặc thư mục..." class="w-full bg-slate-900 border border-slate-700 text-xs px-3.5 py-2 rounded-xl outline-none focus:border-indigo-500">
+        </div>
+        
+        <div class="flex flex-wrap items-center gap-2">
+          <select id="typeFilter" onchange="applyFilters()" class="bg-slate-900 border border-slate-700 text-xs px-3 py-2 rounded-xl outline-none text-slate-300">
+            <option value="all">📂 Tất cả loại tệp</option>
+            <option value="folder">📁 Thư mục</option>
+            <option value="image">🖼️ Hình ảnh</option>
+            <option value="video">🎥 Video</option>
+            <option value="doc">📄 Tài liệu / Mã nguồn</option>
+          </select>
+
+          <select id="sortBy" onchange="applyFilters()" class="bg-slate-900 border border-slate-700 text-xs px-3 py-2 rounded-xl outline-none text-slate-300">
+            <option value="name_asc">🔤 Tên (A-Z)</option>
+            <option value="name_desc">🔤 Tên (Z-A)</option>
+            <option value="size_desc">📉 Dung lượng (Giảm)</option>
+            <option value="size_asc">📈 Dung lượng (Tăng)</option>
+            <option value="date_desc">🕒 Mới nhất</option>
+            <option value="date_asc">🕒 Cũ nhất</option>
+          </select>
         </div>
       </div>
 
-      <!-- BẢNG TỆP -->
+      <div class="px-6 py-3 border-b border-slate-700 flex flex-wrap justify-between items-center gap-3 bg-slate-900/30">
+        <div class="flex items-center gap-3">
+          <h2 class="font-bold text-slate-200 flex items-center gap-2 text-sm">
+            📁 Danh Sách Tệp
+            <span id="fileCountBadge" class="text-xs bg-slate-700 text-indigo-300 px-2 py-0.5 rounded-full">0</span>
+          </h2>
+          <span id="selectedCountText" class="text-xs text-amber-400 font-semibold hidden">(Đã chọn: 0)</span>
+        </div>
+
+        <div id="multiSelectActions" class="hidden flex items-center gap-2">
+          <button onclick="downloadSelectedItems()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold shadow-md flex items-center gap-1">
+            📥 Tải Đã Chọn
+          </button>
+          <button onclick="openMoveModalForSelected()" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold shadow-md flex items-center gap-1">
+            🚚 Di Chuyển
+          </button>
+          <button onclick="deleteSelectedItems()" class="bg-rose-600 hover:bg-rose-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold shadow-md flex items-center gap-1">
+            🗑️ Xóa Đã Chọn
+          </button>
+        </div>
+      </div>
+
       <div class="overflow-x-auto">
-        <table class="w-full text-left text-xs">
-          <thead class="bg-slate-900/50 text-slate-400 border-b border-slate-700/60 uppercase font-semibold">
+        <table class="w-full text-left text-sm text-slate-300">
+          <thead class="bg-slate-900/50 text-slate-400 border-b border-slate-700 text-xs uppercase">
             <tr>
               <th class="p-4 w-10 text-center">
-                <input id="selectAllCheckbox" type="checkbox" onchange="toggleSelectAll(this)" class="w-4 h-4 rounded bg-slate-900 border-slate-700 accent-indigo-600">
+                <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)" class="w-4 h-4 rounded bg-slate-900 border-slate-700 accent-indigo-600 cursor-pointer">
               </th>
-              <th class="p-4">TÊN TỆP / THƯ MỤC <span id="fileCountBadge" class="ml-1 bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded-full text-[10px]">0</span> <span id="selectedCountText" class="hidden text-amber-400 font-normal"></span></th>
-              <th class="p-4 w-28">DUNG LƯỢNG</th>
-              <th class="p-4 w-36">NGÀY TẠO</th>
-              <th class="p-4 w-60 text-right">THAO TÁC</th>
+              <th class="p-4">Tên tệp / thư mục</th>
+              <th class="p-4">Dung lượng</th>
+              <th class="p-4">Ngày tạo</th>
+              <th class="p-4 text-right">Thao tác</th>
             </tr>
           </thead>
-          <tbody id="fileTableBody" class="divide-y divide-slate-700/40">
-            <tr><td colspan="5" class="p-6 text-center text-slate-500">Thư mục trống.</td></tr>
+          <tbody id="fileTableBody" class="divide-y divide-slate-700/50">
+            <tr><td colspan="5" class="p-6 text-center text-slate-500">Đang khởi tạo dữ liệu...</td></tr>
           </tbody>
         </table>
       </div>
     </div>
   </div>
 
-  <!-- CONTAINER THÔNG BÁO TẢI FILE (TOAST) -->
-  <div id="downloadToastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 w-80 pointer-events-none"></div>
-
-  <!-- MODAL DĂNG NHẬP -->
-  <div id="loginScreen" class="fixed inset-0 bg-slate-950 flex items-center justify-center p-4 z-50">
-    <div class="bg-slate-900 border border-slate-800 p-6 rounded-3xl w-full max-w-sm space-y-4 shadow-2xl">
-      <div class="text-center space-y-1">
-        <div class="text-4xl">☁️</div>
-        <h2 class="text-lg font-bold text-slate-100">Đăng Nhập Cloud Storage</h2>
+  <!-- MODAL XEM TRƯỚC FILE / VIDEO -->
+  <div id="previewModal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-4 hidden">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+      <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
+        <h3 id="previewTitle" class="text-sm font-bold text-indigo-400 truncate pr-4">Đang tải xem trước...</h3>
+        <button onclick="closePreviewModal()" class="text-slate-400 hover:text-white text-2xl font-bold">&times;</button>
       </div>
-      <div class="space-y-3">
-        <input id="inputMTB" type="text" placeholder="Nhập Mã Thiết Bị (MTB)" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500">
-        <input id="inputMK" type="password" placeholder="Nhập Mật Khẩu" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500">
-        <button onclick="loginWithCloud()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs py-2.5 rounded-xl transition">Đăng Nhập</button>
+      <div id="previewBody" class="p-6 flex-1 overflow-auto flex items-center justify-center bg-slate-950/50 min-h-[300px]">
+        <div class="text-center text-slate-400 text-sm">⏳ Đang tải...</div>
       </div>
-      <div id="loginStatus" class="hidden text-xs text-center font-medium"></div>
     </div>
   </div>
 
-  <!-- MODAL XEM TRƯỚC -->
-  <div id="previewModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex flex-col items-center justify-center p-4">
-    <div class="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
-      <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
-        <h3 id="previewTitle" class="text-xs font-bold text-indigo-300 truncate">Xem trước</h3>
-        <button onclick="closePreviewModal()" class="text-slate-400 hover:text-white font-bold text-sm px-2 py-1">✕</button>
+  <!-- MODAL SAO LƯU -->
+  <div id="backupModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 hidden">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h3 class="text-lg font-bold text-purple-400 flex items-center gap-2">
+          📜 5 Bản Sao Lưu Hệ Thống
+        </h3>
+        <button onclick="closeBackupModal()" class="text-slate-400 hover:text-white text-xl">&times;</button>
       </div>
-      <div id="previewBody" class="p-4 flex-1 flex items-center justify-center overflow-auto bg-slate-950"></div>
+      <div id="backupListContainer" class="space-y-3 max-h-80 overflow-y-auto pr-1">
+        <div class="text-center py-6 text-slate-400 text-xs">Đang đọc dữ liệu...</div>
+      </div>
+      <div class="flex justify-end pt-2">
+        <button onclick="closeBackupModal()" class="bg-slate-700 hover:bg-slate-600 text-xs text-white px-4 py-2 rounded-xl">Đóng</button>
+      </div>
     </div>
   </div>
 
   <!-- MODAL DI CHUYỂN -->
-  <div id="moveModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl w-full max-w-sm space-y-4 shadow-2xl">
-      <h3 class="text-xs font-bold text-slate-200">🚚 Di chuyển mục tới:</h3>
-      <select id="targetFolderSelect" class="w-full bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded-xl p-2.5 focus:outline-none"></select>
-      <div class="flex justify-end gap-2">
-        <button onclick="closeMoveModal()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-3 py-1.5 rounded-xl">Hủy</button>
-        <button onclick="executeMoveItems()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3 py-1.5 rounded-xl font-semibold">Xác nhận</button>
+  <div id="moveModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 hidden">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+      <h3 class="text-md font-bold text-amber-400 flex items-center gap-2 border-b border-slate-700 pb-2">
+        🚚 Chọn Thư Mục Đích
+      </h3>
+      <div class="space-y-2">
+        <label class="block text-xs text-slate-300">Chuyển đến thư mục:</label>
+        <select id="targetFolderSelect" class="w-full bg-slate-900 border border-slate-700 text-sm px-3 py-2 rounded-xl text-slate-200 outline-none">
+          <option value="null">🏠 Trang Chủ (Root)</option>
+        </select>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="closeMoveModal()" class="bg-slate-700 hover:bg-slate-600 text-xs text-white px-4 py-2 rounded-xl">Hủy</button>
+        <button onclick="executeMoveItems()" class="bg-amber-600 hover:bg-amber-500 text-xs text-white px-4 py-2 rounded-xl font-semibold">Xác Nhận Di Chuyển</button>
       </div>
     </div>
   </div>
 
-  <!-- MODAL LỊCH SỬ SAO LƯU SHEET -->
-  <div id="backupModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-slate-800 border border-slate-700 p-5 rounded-2xl w-full max-w-md space-y-4 shadow-2xl">
-      <div class="flex justify-between items-center border-b border-slate-700 pb-3">
-        <h3 class="text-xs font-bold text-purple-300">📜 Bản Sao Lưu Google Sheets</h3>
-        <button onclick="closeBackupModal()" class="text-slate-400 hover:text-white font-bold text-sm">✕</button>
-      </div>
-      <div id="backupListContainer" class="space-y-3 max-h-80 overflow-y-auto pr-1"></div>
-    </div>
-  </div>
-
-  <!-- JS CHÍNH VÀ CÁC CẢI TIẾN REALTIME -->
   <script>
     let CURRENT_MTB = localStorage.getItem('cur_mtb') || null;
     let MAX_STORAGE_GB = localStorage.getItem('cur_max_gb') ? parseFloat(localStorage.getItem('cur_max_gb')) : 5;
@@ -198,7 +250,7 @@
     let moveTargetItemIds = [];
     let activePreviewObjectUrl = null;
 
-    const CHUNK_SIZE = 10 * 1024 * 1024; // Chunk 10MB
+    const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB
 
     window.onload = async () => {
       setupDragAndDrop();
@@ -304,7 +356,7 @@
           })
         });
       } catch (err) {
-        console.error("Lỗi sao lưu ngầm!", err);
+        console.error("Lỗi sao lưu!", err);
       }
     }
 
@@ -350,13 +402,11 @@
       if (files.length > 0) startBatchUploadQueue(files);
     }
 
-    // =========================================================
-    // HÀM UPLOAD - ĐÃ ĐƯỢC TỐI ƯU SẮP XẾP VÀ CẬP NHẬT GIAO DIỆN REALTIME
-    // =========================================================
+    // TỐI ƯU HÀM START BATCH UPLOAD QUEUE TỪ FILE 2
     async function startBatchUploadQueue(files) {
       if (!files || files.length === 0) return;
 
-      // 1. Sắp xếp file theo dung lượng tăng dần (tải file nhẹ trước)
+      // 1. TỐI ƯU: Sắp xếp danh sách file theo dung lượng TĂNG DẦN (File nhẹ lên trước)
       const sortedFiles = Array.from(files).sort((a, b) => a.size - b.size);
 
       const progressModal = document.getElementById('progressModal');
@@ -366,6 +416,7 @@
 
       if (progressModal) progressModal.classList.remove('hidden');
 
+      // 2. Lần lượt xử lý từng file đã sắp xếp
       for (let i = 0; i < sortedFiles.length; i++) {
         const file = sortedFiles[i];
         const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
@@ -379,7 +430,7 @@
 
           const percent = Math.round(((c + 1) / totalChunks) * 100);
           if (statusText) {
-            statusText.innerText = `📦 [${i + 1}/${sortedFiles.length}] Uploading: ${file.name} (${formatBytes(file.size)}) - Mảnh ${c + 1}/${totalChunks}`;
+            statusText.innerText = `📦 [${i + 1}/${sortedFiles.length}] Uploading: ${file.name} (${formatBytes(file.size)}) - Chunk ${c + 1}/${totalChunks}`;
           }
           if (progressBar) progressBar.style.width = `${percent}%`;
           if (percentText) percentText.innerText = `${percent}%`;
@@ -408,11 +459,11 @@
           if (!uploadSuccess) {
             alert(`❌ Lỗi Upload tệp: ${file.name}`);
             isFileError = true;
-            break;
+            break; // Bỏ qua file lỗi, tiếp tục file tiếp theo
           }
         }
 
-        // TỆP NÀO TẢI XONG -> ĐẨY XUỐNG BẢNG & BACKUP TỨC THÌ
+        // 3. TỐI ƯU REAL-TIME: Tải xong file nào -> Đẩy vào Danh sách & Render UI NGAY LẬP TỨC
         if (!isFileError && chunkIds.length === totalChunks) {
           const newFileItem = {
             id: "file_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
@@ -420,32 +471,35 @@
             size: file.size,
             chunks: chunkIds,
             isFolder: false,
-            parentId: currentFolderId, // Thư mục hiện tại
+            parentId: currentFolderId,
             date: new Date().toLocaleString('vi-VN'),
             timestamp: Date.now()
           };
 
-          // 1. Đẩy vào danh sách
+          // Đẩy tệp mới vào đầu mảng dữ liệu
           dbFiles.unshift(newFileItem);
 
-          // 2. Ép giao diện vẽ lại ngay lập tức
-          applyFilters();
-          updateStorageUsage();
+          // KÍCH HOẠT CẬP NHẬT GIAO DIỆN TỨC THÌ
+          if (typeof applyFilters === 'function') applyFilters();
+          if (typeof updateStorageUsage === 'function') updateStorageUsage();
 
-          // 3. Tự động lưu lên Sheet ngầm
-          manualBackupToSheet();
+          // Tự động sao lưu ngầm lên Google Sheet ngay lập tức
+          if (typeof manualBackupToSheet === 'function') {
+            manualBackupToSheet();
+          }
         }
       }
 
+      // Hoàn tất toàn bộ danh sách upload
       const fileInput = document.getElementById('fileInput');
       if (fileInput) fileInput.value = '';
       if (progressModal) progressModal.classList.add('hidden');
     }
 
-    // TẢI FILE NỐI MẢNH TỐC ĐỘ CAO (4 LUỒNG SONG SONG)
+    // TẢI FILE ĐA LUỒNG TỐC ĐỘ CAO (TĂNG LÊN 4 LUỒNG TẢI SONG SONG - DỌN RAM)
     async function fetchChunksOptimized(chunks, filename, progressCallback) {
       const results = new Array(chunks.length);
-      const CONCURRENCY = 4;
+      const CONCURRENCY = 4; // Tải 4 Chunk song song đẩy tối đa tốc độ
       let completedCount = 0;
 
       const fetchSingleChunk = async (index) => {
@@ -455,7 +509,7 @@
         let downloadedBlob = null;
         for (let attempt = 1; attempt <= 3; attempt++) {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 12000);
+          const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s Timeout
 
           try {
             const res = await fetch(proxyUrl, {
@@ -506,6 +560,7 @@
       return mimeTypes[ext] || 'application/octet-stream';
     }
 
+    // TẢI TỆP THÔNG MINH - TỰ PHÂN LOẠI TRÁNH NGHẼN RAM
     async function downloadSingleFile(id) {
       const item = dbFiles.find(f => f.id === id);
       if (!item || item.isFolder) return;
@@ -514,6 +569,7 @@
       showToastNotification(toastId, item.name);
 
       try {
+        // NẾU FILE CHỈ CÓ 1 CHUNK: Tải trực tiếp qua luồng Proxy Stream không nạp Blob
         if (item.chunks.length === 1) {
           updateToastProgress(toastId, 1, 1);
           const directUrl = `/api/file-proxy?fileId=${encodeURIComponent(item.chunks[0])}&filename=${encodeURIComponent(item.name)}`;
@@ -530,6 +586,7 @@
           return;
         }
 
+        // NẾU FILE PHÂN MẢNH: Tải đa luồng + Dọn dẹp RAM triệt để
         const blobParts = await fetchChunksOptimized(item.chunks, item.name, (current, total) => {
           updateToastProgress(toastId, current, total);
         });
@@ -537,6 +594,7 @@
         const fileMime = getMimeType(item.name);
         const fullBlob = new Blob(blobParts, { type: fileMime });
 
+        // Giải phóng ngay mảng con
         for (let i = 0; i < blobParts.length; i++) {
           blobParts[i] = null;
         }
@@ -550,6 +608,7 @@
         document.body.appendChild(a);
         a.click();
 
+        // Giải phóng bộ nhớ RAM ObjectURL lập tức
         setTimeout(() => {
           a.remove();
           URL.revokeObjectURL(objectUrl);
@@ -618,6 +677,7 @@
       modal.classList.remove('hidden');
       title.innerText = `🎬 Xem trước: ${item.name}`;
 
+      // NẾU LÀ VIDEO VÀ CÓ 1 CHUNK: Cho phát Stream trực tiếp, không nạp RAM
       const ext = getFileExtension(item.name);
       if (['mp4', 'webm', 'mkv', 'mov'].includes(ext) && item.chunks.length === 1) {
         const streamUrl = `/api/file-proxy?fileId=${encodeURIComponent(item.chunks[0])}&filename=${encodeURIComponent(item.name)}`;
