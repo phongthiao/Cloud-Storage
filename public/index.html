@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cloud Storage - Fixed Download Version</title>
+  <title>Cloud Storage Pro - Video Stream Fixed</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen p-4 sm:p-6 font-sans select-none" id="dropZone">
@@ -52,7 +52,7 @@
       <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
           <h1 class="text-2xl font-bold text-indigo-400 flex items-center gap-2">⚡ Cloud Storage Pro</h1>
-          <p class="text-xs text-slate-400 mt-1">Tải song song tốc độ cao • Hỗ trợ Kéo - Thả • Tải siêu mượt</p>
+          <p class="text-xs text-slate-400 mt-1">Hệ thống lưu trữ phân mảnh • Phát Video chuẩn 100%</p>
         </div>
         
         <!-- Thanh Điều Hướng -->
@@ -63,11 +63,11 @@
             💾 Sao Lưu
           </button>
 
-          <button onclick="exportBackupToFile()" class="text-xs bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-2 rounded-xl transition font-semibold flex items-center gap-1 shadow-lg shadow-cyan-600/20" title="Tải file JSON sao lưu về máy">
+          <button onclick="exportBackupToFile()" class="text-xs bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-2 rounded-xl transition font-semibold flex items-center gap-1 shadow-lg shadow-cyan-600/20">
             📤 Xuất Sao Lưu
           </button>
 
-          <button onclick="document.getElementById('importBackupInput').click()" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-2 rounded-xl transition font-semibold flex items-center gap-1 shadow-lg shadow-amber-600/20" title="Nhập file JSON sao lưu từ máy">
+          <button onclick="document.getElementById('importBackupInput').click()" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-2 rounded-xl transition font-semibold flex items-center gap-1 shadow-lg shadow-amber-600/20">
             📥 Nhập Sao Lưu
           </button>
           <input type="file" id="importBackupInput" accept=".json" class="hidden" onchange="importBackupFromFile(event)">
@@ -116,7 +116,7 @@
       </div>
     </div>
 
-    <!-- Danh Sách Bảng -->
+    <!-- Bảng Danh Sách Tệp -->
     <div class="bg-slate-800 rounded-2xl shadow-lg border border-slate-700 overflow-hidden space-y-2">
       <div class="bg-slate-900/60 px-6 py-3 border-b border-slate-700 flex items-center gap-2 text-sm text-slate-300 overflow-x-auto" id="breadcrumbBar"></div>
 
@@ -188,19 +188,20 @@
     </div>
   </div>
 
-  <!-- MODALS -->
+  <!-- MODAL XEM TRƯỚC FILE / VIDEO -->
   <div id="previewModal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-4 hidden">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
       <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
-        <h3 id="previewTitle" class="text-sm font-bold text-indigo-400 truncate pr-4">Đang tải bản xem trước...</h3>
+        <h3 id="previewTitle" class="text-sm font-bold text-indigo-400 truncate pr-4">Đang tải xem trước...</h3>
         <button onclick="closePreviewModal()" class="text-slate-400 hover:text-white text-2xl font-bold">&times;</button>
       </div>
       <div id="previewBody" class="p-6 flex-1 overflow-auto flex items-center justify-center bg-slate-950/50 min-h-[300px]">
-        <div class="text-center text-slate-400 text-sm">⏳ Đang giải mã và tải dữ liệu...</div>
+        <div class="text-center text-slate-400 text-sm">⏳ Đang tải...</div>
       </div>
     </div>
   </div>
 
+  <!-- MODAL SAO LƯU -->
   <div id="backupModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 hidden">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-700 pb-3">
@@ -218,6 +219,7 @@
     </div>
   </div>
 
+  <!-- MODAL DI CHUYỂN -->
   <div id="moveModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 hidden">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
       <h3 class="text-md font-bold text-amber-400 flex items-center gap-2 border-b border-slate-700 pb-2">
@@ -248,8 +250,8 @@
     const previewCache = new Map();
     const MAX_PREVIEW_CACHE = 5;
 
-    const CHUNK_SIZE = 10 * 1024 * 1024;
-    const CONCURRENCY_LIMIT = 4;
+    const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB
+    const CONCURRENCY_LIMIT = 3;
 
     window.onload = async () => {
       setupDragAndDrop();
@@ -360,13 +362,13 @@
           })
         });
       } catch (err) {
-        console.error("Lỗi truyền tải sao lưu!", err);
+        console.error("Lỗi lưu sao lưu!", err);
       }
     }
 
     function exportBackupToFile() {
       if (!dbFiles || dbFiles.length === 0) {
-        return alert("Chưa có dữ liệu nào để xuất sao lưu!");
+        return alert("Chưa có dữ liệu để xuất sao lưu!");
       }
 
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dbFiles, null, 2));
@@ -389,19 +391,19 @@
         try {
           const importedData = JSON.parse(e.target.result);
           if (Array.isArray(importedData)) {
-            if (confirm(`Bạn có muốn ghi đè hệ thống bằng bản sao lưu (${importedData.length} mục) từ file này?`)) {
+            if (confirm(`Bạn có muốn ghi đè dữ liệu bằng bản sao lưu (${importedData.length} mục)?`)) {
               dbFiles = importedData;
               renderBreadcrumb();
               applyFilters();
               updateStorageUsage();
               await manualBackupToSheet();
-              alert("🎉 Nhập dữ liệu sao lưu thành công!");
+              alert("🎉 Nhập sao lưu thành công!");
             }
           } else {
-            alert("❌ Định dạng file JSON sao lưu không hợp lệ!");
+            alert("❌ Định dạng sao lưu JSON không hợp lệ!");
           }
         } catch (err) {
-          alert("❌ Không thể đọc file JSON! Chi tiết lỗi: " + err.message);
+          alert("❌ Không đọc được tệp JSON! Lỗi: " + err.message);
         }
       };
       reader.readAsText(file);
@@ -434,7 +436,7 @@
           const chunkBlob = file.slice(start, end);
 
           const percent = Math.round(((c + 1) / totalChunks) * 100);
-          statusText.innerText = `📦 [${i+1}/${files.length}] Uploading ${file.name} (Mảnh ${c+1}/${totalChunks})`;
+          statusText.innerText = `📦 [${i+1}/${files.length}] Đang Upload ${file.name} (Chunk ${c+1}/${totalChunks})`;
           progressBar.style.width = `${percent}%`;
           percentText.innerText = `${percent}%`;
 
@@ -447,7 +449,7 @@
           if (data.success) {
             chunkIds.push(data.file_id);
           } else {
-            alert(`❌ Lỗi upload tệp ${file.name}: ${data.message}`);
+            alert(`❌ Lỗi Upload tệp ${file.name}: ${data.message}`);
             break;
           }
         }
@@ -484,7 +486,7 @@
         
         const p = fetch(proxyUrl)
           .then(r => {
-            if (!r.ok) throw new Error("Lỗi mảnh file");
+            if (!r.ok) throw new Error(`Lỗi tải mảnh #${i+1}`);
             return r.blob();
           })
           .then(blob => {
@@ -503,13 +505,39 @@
       return results;
     }
 
+    function getFileExtension(filename) {
+      return filename ? filename.split('.').pop().toLowerCase() : '';
+    }
+
+    function getMimeType(filename) {
+      const ext = getFileExtension(filename);
+      const mimeTypes = {
+        'mp4': 'video/mp4', 'webm': 'video/webm', 'mkv': 'video/x-matroska',
+        'mp3': 'audio/mpeg', 'wav': 'audio/wav', 'ogg': 'audio/ogg',
+        'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp',
+        'pdf': 'application/pdf', 'txt': 'text/plain; charset=utf-8', 'json': 'application/json; charset=utf-8'
+      };
+      return mimeTypes[ext] || 'application/octet-stream';
+    }
+
     async function fetchFileBlobFromItem(item) {
       if (previewCache.has(item.id)) {
         return previewCache.get(item.id);
       }
 
+      if (!item.chunks || item.chunks.length === 0) {
+        throw new Error("Không tìm thấy các mảnh Chunk của tệp!");
+      }
+
       const blobParts = await fetchChunksWithLimit(item.chunks, item.name, CONCURRENCY_LIMIT);
-      const fullBlob = new Blob(blobParts, { type: getMimeType(item.name) });
+      
+      const totalDownloadedBytes = blobParts.reduce((sum, b) => sum + (b ? b.size : 0), 0);
+      if (item.size && totalDownloadedBytes < item.size * 0.95) {
+        throw new Error(`Dữ liệu không đầy đủ! Đã tải ${formatBytes(totalDownloadedBytes)} / ${formatBytes(item.size)}.`);
+      }
+
+      const fileMime = getMimeType(item.name);
+      const fullBlob = new Blob(blobParts, { type: fileMime });
       const objectUrl = URL.createObjectURL(fullBlob);
 
       if (previewCache.size >= MAX_PREVIEW_CACHE) {
@@ -531,42 +559,68 @@
       const body = document.getElementById('previewBody');
 
       modal.classList.remove('hidden');
-      title.innerText = `📄 Xem trước: ${item.name}`;
-      body.innerHTML = `<div class="text-center text-indigo-400 text-sm animate-pulse">⏳ Đang tải an toàn các mảnh file...</div>`;
+      title.innerText = `🎬 Xem trước: ${item.name}`;
+      body.innerHTML = `
+        <div class="text-center space-y-2">
+          <div class="text-3xl animate-bounce">⏳</div>
+          <p class="text-indigo-400 text-sm font-semibold">Đang giải mã và gộp các mảnh dữ liệu...</p>
+        </div>`;
 
       try {
         const objectUrl = await fetchFileBlobFromItem(item);
         const ext = getFileExtension(item.name);
+        const mimeType = getMimeType(item.name);
 
-        if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
-          body.innerHTML = `<img src="${objectUrl}" class="max-h-[70vh] max-w-full rounded-lg object-contain shadow-md">`;
-        } else if (['mp4', 'webm'].includes(ext)) {
-          body.innerHTML = `<video src="${objectUrl}" controls autoplay class="max-h-[70vh] max-w-full rounded-lg"></video>`;
+        if (['mp4', 'webm', 'mkv', 'mov'].includes(ext)) {
+          body.innerHTML = `
+            <video controls autoplay playsinline class="max-h-[75vh] w-full rounded-xl shadow-2xl bg-black">
+              <source src="${objectUrl}" type="${mimeType}">
+              Trình duyệt không hỗ trợ phát Video này.
+            </video>`;
+        } else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+          body.innerHTML = `<img src="${objectUrl}" class="max-h-[75vh] max-w-full rounded-lg object-contain shadow-md">`;
         } else if (['mp3', 'wav', 'ogg'].includes(ext)) {
-          body.innerHTML = `<audio src="${objectUrl}" controls autoplay class="w-full max-w-md"></audio>`;
+          body.innerHTML = `
+            <div class="p-6 bg-slate-900 rounded-2xl border border-slate-700 text-center space-y-4">
+              <div class="text-5xl">🎵</div>
+              <audio src="${objectUrl}" controls autoplay class="w-full max-w-md mx-auto"></audio>
+            </div>`;
         } else if (ext === 'pdf') {
-          body.innerHTML = `<iframe src="${objectUrl}" class="w-full h-[70vh] rounded-lg"></iframe>`;
-        } else if (['txt', 'json', 'html', 'js', 'css', 'md', 'py', 'c', 'cpp'].includes(ext)) {
+          body.innerHTML = `<iframe src="${objectUrl}" class="w-full h-[75vh] rounded-lg"></iframe>`;
+        } else if (['txt', 'json', 'html', 'js', 'css', 'md', 'py'].includes(ext)) {
           const textRes = await fetch(objectUrl);
           const textContent = await textRes.text();
-          body.innerHTML = `<pre class="bg-slate-900 p-4 rounded-lg text-xs text-slate-200 overflow-auto max-h-[70vh] w-full font-mono select-text">${escapeHtml(textContent)}</pre>`;
+          body.innerHTML = `<pre class="bg-slate-900 p-4 rounded-lg text-xs text-slate-200 overflow-auto max-h-[75vh] w-full font-mono select-text">${escapeHtml(textContent)}</pre>`;
         } else {
           body.innerHTML = `
-            <div class="text-center space-y-3">
-              <p class="text-slate-400 text-sm">Định dạng file không hỗ trợ xem trực tiếp.</p>
-              <button onclick="downloadSingleFile('${item.id}')" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-4 py-2 rounded-xl">📥 Tải về tệp này</button>
+            <div class="text-center space-y-3 p-6">
+              <div class="text-4xl">📦</div>
+              <p class="text-slate-300 text-sm">Định dạng tệp không hỗ trợ xem trực tuyến.</p>
+              <button onclick="downloadSingleFile('${item.id}')" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-4 py-2.5 rounded-xl font-semibold shadow-lg">
+                📥 Tải tệp về máy
+              </button>
             </div>`;
         }
       } catch (err) {
-        body.innerHTML = `<div class="text-rose-400 text-sm">❌ Lỗi giải mã tệp: ${err.message}</div>`;
+        body.innerHTML = `
+          <div class="text-center space-y-3 p-6">
+            <div class="text-4xl">❌</div>
+            <p class="text-rose-400 text-sm font-semibold">Lỗi tải dữ liệu: ${err.message}</p>
+          </div>`;
       }
     }
 
     function closePreviewModal() {
+      const body = document.getElementById('previewBody');
+      const videoElem = body.querySelector('video');
+      if (videoElem) {
+        videoElem.pause();
+        videoElem.src = "";
+      }
+      body.innerHTML = "";
       document.getElementById('previewModal').classList.add('hidden');
     }
 
-    // --- SỬA TRIỆT ĐỂ LỖI KHÔNG TẢI XUỐNG ĐƯỢC FILE ---
     async function downloadSingleFile(id) {
       const item = dbFiles.find(f => f.id === id);
       if (!item || item.isFolder) return;
@@ -579,24 +633,22 @@
         a.style.display = 'none';
         document.body.appendChild(a);
         
-        // Trigger tải file
         a.click();
         
         setTimeout(() => {
           document.body.removeChild(a);
         }, 100);
       } catch (err) {
-        alert("❌ Lỗi khi tải tệp: " + err.message);
+        alert("❌ Lỗi tải tệp: " + err.message);
       }
     }
 
     async function downloadSelectedItems() {
       const itemsToDownload = dbFiles.filter(f => selectedFileIds.has(f.id) && !f.isFolder);
-      if (itemsToDownload.length === 0) return alert("Không có tệp nào được chọn để tải!");
+      if (itemsToDownload.length === 0) return alert("Không có tệp được chọn!");
 
       for (let i = 0; i < itemsToDownload.length; i++) {
         await downloadSingleFile(itemsToDownload[i].id);
-        // Tránh bị browser chặn tải nhiều tệp liên tục bằng cách delay 500ms giữa mỗi tệp
         await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
@@ -674,7 +726,7 @@
 
           const ext = getFileExtension(f.name);
           if (typeFilter === 'image') return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
-          if (typeFilter === 'video') return ['mp4', 'webm', 'mkv', 'avi'].includes(ext);
+          if (typeFilter === 'video') return ['mp4', 'webm', 'mkv', 'mov'].includes(ext);
           if (typeFilter === 'doc') return ['pdf', 'txt', 'doc', 'docx', 'xls', 'xlsx', 'json', 'js', 'html'].includes(ext);
           return true;
         });
@@ -751,7 +803,7 @@
 
     function deleteSelectedItems() {
       if (selectedFileIds.size === 0) return;
-      if (confirm(`Bạn có chắc chắn muốn xóa ${selectedFileIds.size} mục đã chọn (bao gồm thư mục con)?`)) {
+      if (confirm(`Bạn muốn xóa ${selectedFileIds.size} mục đã chọn?`)) {
         const allIdsToDelete = getRecursiveIdsToDelete(Array.from(selectedFileIds));
         dbFiles = dbFiles.filter(item => !allIdsToDelete.has(item.id));
         selectedFileIds.clear();
@@ -763,7 +815,7 @@
     }
 
     function deleteSingleItem(id) {
-      if (confirm("Bạn có chắc muốn xóa mục này?")) {
+      if (confirm("Xóa mục này?")) {
         const allIdsToDelete = getRecursiveIdsToDelete([id]);
         dbFiles = dbFiles.filter(f => !allIdsToDelete.has(f.id));
         selectedFileIds.delete(id);
@@ -829,7 +881,7 @@
       document.getElementById('fileCountBadge').innerText = items.length;
 
       if (items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-500">Không có tệp hoặc thư mục nào.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-500">Thư mục trống.</td></tr>`;
         return;
       }
 
@@ -886,7 +938,7 @@
               </div>
               <div class="flex justify-end pt-1">
                 <button onclick="applyBackupFromCloud('${encodedData}')" class="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1.5 rounded-lg font-semibold transition">
-                  📥 Khôi Phục Bản Này
+                  📥 Khôi Phục
                 </button>
               </div>
             </div>`;
@@ -913,11 +965,11 @@
             applyFilters();
             updateStorageUsage();
             closeBackupModal();
-            alert("🎉 Khôi phục dữ liệu thành công!");
+            alert("🎉 Khôi phục thành công!");
           }
         }
       } catch (e) {
-        alert("❌ Dữ liệu bản sao lưu không hợp lệ!");
+        alert("❌ Bản sao lưu không hợp lệ!");
       }
     }
 
@@ -933,20 +985,6 @@
     function logout() {
       localStorage.clear();
       location.reload();
-    }
-
-    function getFileExtension(filename) {
-      return filename ? filename.split('.').pop().toLowerCase() : '';
-    }
-
-    function getMimeType(filename) {
-      const ext = getFileExtension(filename);
-      const mimeTypes = {
-        'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'gif': 'image/gif',
-        'mp4': 'video/mp4', 'webm': 'video/webm', 'mp3': 'audio/mpeg', 'pdf': 'application/pdf',
-        'txt': 'text/plain', 'json': 'application/json', 'html': 'text/html'
-      };
-      return mimeTypes[ext] || 'application/octet-stream';
     }
 
     function escapeHtml(text) {
