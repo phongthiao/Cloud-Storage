@@ -35,7 +35,7 @@ let SYSTEM_CHAT_ID = process.env.CHAT_ID || "";
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Tự động dọn dẹp file tạm cũ hơn 1 tiếng
+// Cron job dọn dẹp file tạm mỗi 30 phút
 cron.schedule('*/30 * * * *', () => {
   fs.readdir(uploadDir, (err, files) => {
     if (err) return;
@@ -78,7 +78,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// API Tải bản sao lưu
+// API Tải sao lưu
 app.get('/api/backup', async (req, res) => {
   try {
     const { mtb } = req.query;
@@ -105,7 +105,7 @@ app.post('/api/save-backup', async (req, res) => {
   }
 });
 
-// API Upload từng Chunk lên Telegram (Có Retry tránh 429)
+// API Upload từng Chunk lên Telegram (Tối ưu tự động Retry 5 lần khi dính 429)
 app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   const filePath = req.file ? req.file.path : null;
   try {
@@ -155,7 +155,7 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   }
 });
 
-// API Proxy tải/stream từng Chunk dữ liệu
+// API Proxy Stream Chunk
 app.get('/api/file-proxy', async (req, res) => {
   try {
     const { fileId, filename } = req.query;
