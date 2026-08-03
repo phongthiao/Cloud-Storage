@@ -10,7 +10,6 @@ const cron = require('node-cron');
 
 const app = express();
 
-// Khởi tạo thư mục upload tạm
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -35,7 +34,6 @@ let SYSTEM_CHAT_ID = process.env.CHAT_ID || "";
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Cron job dọn dẹp file tạm mỗi 30 phút
 cron.schedule('*/30 * * * *', () => {
   fs.readdir(uploadDir, (err, files) => {
     if (err) return;
@@ -51,7 +49,6 @@ cron.schedule('*/30 * * * *', () => {
   });
 });
 
-// API Đăng nhập
 app.post('/api/login', async (req, res) => {
   try {
     const response = await fetch(AUTH_API_URL, {
@@ -78,7 +75,6 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// API Tải sao lưu
 app.get('/api/backup', async (req, res) => {
   try {
     const { mtb } = req.query;
@@ -90,7 +86,6 @@ app.get('/api/backup', async (req, res) => {
   }
 });
 
-// API Lưu sao lưu
 app.post('/api/save-backup', async (req, res) => {
   try {
     const response = await fetch(BACKUP_SCRIPT_URL, {
@@ -105,7 +100,6 @@ app.post('/api/save-backup', async (req, res) => {
   }
 });
 
-// API Upload từng Chunk lên Telegram (Tối ưu tự động Retry 5 lần khi dính 429)
 app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   const filePath = req.file ? req.file.path : null;
   try {
@@ -155,7 +149,7 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   }
 });
 
-// API Proxy Stream Chunk
+// Proxy lấy Chunk từ Telegram với Retry nội bộ
 app.get('/api/file-proxy', async (req, res) => {
   try {
     const { fileId, filename } = req.query;
@@ -176,6 +170,10 @@ app.get('/api/file-proxy', async (req, res) => {
     }
 
     const fileStream = await fetch(fileUrl, { headers: fetchHeaders });
+
+    if (!fileStream.ok) {
+      return res.status(fileStream.status).send("Không thể kết nối Telegram CDN");
+    }
 
     let contentType = 'application/octet-stream';
     if (filename) {
@@ -200,11 +198,11 @@ app.get('/api/file-proxy', async (req, res) => {
       res.setHeader('Content-Length', fileStream.headers.get('content-length'));
     }
 
-    res.setHeader('Content-Disposition', filename ? `attachment; filename="${encodeURIComponent(filename)}"` : 'inline');
+    res.setHeader('Content-Disposition', filename ? `inline; filename="${encodeURIComponent(filename)}"` : 'inline');
 
     pipeline(fileStream.body, res, (err) => {
       if (err && err.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
-        console.error('Stream Error:', err);
+        console.error('Stream Proxy Error:', err);
       }
     });
   } catch (err) {
