@@ -9,7 +9,7 @@ const { pipeline } = require('stream');
 
 const app = express();
 
-// Dùng diskStorage lưu tạm vào đĩa /tmp/ thay vì RAM (MemoryStorage)
+// Dùng diskStorage lưu tạm vào đĩa /tmp/ tránh tràn RAM Render
 const upload = multer({ dest: '/tmp/' });
 
 app.use(cors());
@@ -18,11 +18,8 @@ app.use(express.urlencoded({ limit: '200mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const AUTH_API_URL = process.env.AUTH_API_URL || "https://script.google.com/macros/s/AKfycbw-RDeNdYzo7dMnmMRUV2jLkUSCmIN5Fk87suroVvo_bYjyyO05HEKXUcPyf_RLQ_A/exec";
-
-// 🛑 ĐÃ CẬP NHẬT ĐƯỜNG DẪN WEB APP GOOGLE SHEET SAO LƯU MỚI CỦA BẠN
 const BACKUP_SCRIPT_URL = process.env.BACKUP_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbw0EdS-qSOA2PpemKa2sdZ4QghxdikvXreCvuWwAfK_Q-nIGDg-9No0qLHfiLb3kyWFbQ/exec";
 
-// Lưu giữ ID của tin nhắn CSDL cố định để thực hiện sửa tin nhắn (Edit Message)
 let pinnedDbMessageId = null;
 
 // Hàm Bắt Lỗi 429 Rate Limit & Tự động Sleep (retry_after)
@@ -33,9 +30,9 @@ async function fetchTelegramWithRetry(url, options, maxRetries = 5) {
 
     if (res.status === 429 || (data && !data.ok && data.error_code === 429)) {
       const retryAfter = (data.parameters && data.parameters.retry_after) ? data.parameters.retry_after : 3;
-      console.warn(`[Telegram Rate Limit 429] Cảnh báo gửi quá nhanh. Đang tạm dừng (sleep) ${retryAfter}s trước khi gửi lại...`);
+      console.warn(`[Telegram Rate Limit 429] Tạm dừng (sleep) ${retryAfter}s trước khi gửi lại...`);
       await new Promise(resolve => setTimeout(resolve, (retryAfter + 1) * 1000));
-      continue; // Thử lại request
+      continue;
     }
 
     return data;
@@ -70,7 +67,7 @@ app.get('/api/backup', async (req, res) => {
   }
 });
 
-// 3. API Upload Chunk (Tối ưu RAM < 80MB & Tự động xóa file tạm fs.unlinkSync)
+// 3. API Upload Chunk (Tự động xóa file tạm fs.unlinkSync)
 app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   try {
     const { token, chatId } = req.body;
