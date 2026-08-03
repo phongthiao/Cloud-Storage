@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cloud Storage - Ultimate Edition</title>
+  <title>Cloud Storage - Fixed Download Version</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen p-4 sm:p-6 font-sans select-none" id="dropZone">
   
-  <!-- MÀN HÌNH ĐĂNG NHẬPp -->
+  <!-- MÀN HÌNH ĐĂNG NHẬP -->
   <div id="loginScreen" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center z-50 p-4">
     <div class="bg-slate-800 p-6 sm:p-8 rounded-2xl border border-slate-700 max-w-md w-full space-y-4 shadow-2xl">
       <div class="text-center space-y-1">
@@ -36,7 +36,7 @@
     </div>
   </div>
 
-  <!-- OVERLAY HIỆU ỨNG KÉO THẢ FILE -->
+  <!-- OVERLAY KÉO THẢ FILE -->
   <div id="dragOverlay" class="fixed inset-0 bg-indigo-600/20 backdrop-blur-sm border-4 border-dashed border-indigo-400 z-40 flex items-center justify-center hidden pointer-events-none">
     <div class="text-center space-y-2 bg-slate-900/90 p-8 rounded-2xl border border-indigo-500 shadow-2xl">
       <div class="text-6xl animate-bounce">📥</div>
@@ -55,15 +55,25 @@
           <p class="text-xs text-slate-400 mt-1">Tải song song tốc độ cao • Hỗ trợ Kéo - Thả • Tải siêu mượt</p>
         </div>
         
+        <!-- Thanh Điều Hướng -->
         <div class="flex flex-wrap items-center gap-2">
           <span id="userInfoBadge" class="text-xs bg-indigo-500/20 text-indigo-300 px-3 py-2 rounded-xl border border-indigo-500/30 font-mono">Thiết bị: ...</span>
 
           <button onclick="manualBackupToSheet()" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-xl transition font-semibold flex items-center gap-1 shadow-lg shadow-emerald-600/20">
-            💾 Sao Lưu Dữ Liệu
+            💾 Sao Lưu
           </button>
 
+          <button onclick="exportBackupToFile()" class="text-xs bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-2 rounded-xl transition font-semibold flex items-center gap-1 shadow-lg shadow-cyan-600/20" title="Tải file JSON sao lưu về máy">
+            📤 Xuất Sao Lưu
+          </button>
+
+          <button onclick="document.getElementById('importBackupInput').click()" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-2 rounded-xl transition font-semibold flex items-center gap-1 shadow-lg shadow-amber-600/20" title="Nhập file JSON sao lưu từ máy">
+            📥 Nhập Sao Lưu
+          </button>
+          <input type="file" id="importBackupInput" accept=".json" class="hidden" onchange="importBackupFromFile(event)">
+
           <button onclick="openBackupHistoryModal()" class="text-xs bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 px-3 py-2 rounded-xl transition font-semibold flex items-center gap-1">
-            📜 5 Bản Lưu
+            📜 5 Bản Lưu Cloud
           </button>
 
           <button onclick="logout()" class="text-xs bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 px-3 py-2 rounded-xl transition">
@@ -106,12 +116,10 @@
       </div>
     </div>
 
-    <!-- Bộ Lọc, Tìm Kiếm & Bảng Danh Sách -->
+    <!-- Danh Sách Bảng -->
     <div class="bg-slate-800 rounded-2xl shadow-lg border border-slate-700 overflow-hidden space-y-2">
-      <!-- Breadcrumb -->
       <div class="bg-slate-900/60 px-6 py-3 border-b border-slate-700 flex items-center gap-2 text-sm text-slate-300 overflow-x-auto" id="breadcrumbBar"></div>
 
-      <!-- Thanh Tìm Kiếm, Filter & Sort -->
       <div class="p-4 border-b border-slate-700/60 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 bg-slate-800/50">
         <div class="relative flex-1">
           <input type="text" id="searchInput" oninput="applyFilters()" placeholder="🔍 Tìm kiếm tệp hoặc thư mục..." class="w-full bg-slate-900 border border-slate-700 text-xs px-3.5 py-2 rounded-xl outline-none focus:border-indigo-500">
@@ -137,7 +145,6 @@
         </div>
       </div>
 
-      <!-- Thanh Thao Tác Chọn Nhiều (Multi-Select Toolbar) -->
       <div class="px-6 py-3 border-b border-slate-700 flex flex-wrap justify-between items-center gap-3 bg-slate-900/30">
         <div class="flex items-center gap-3">
           <h2 class="font-bold text-slate-200 flex items-center gap-2 text-sm">
@@ -160,7 +167,6 @@
         </div>
       </div>
 
-      <!-- Bảng File -->
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm text-slate-300">
           <thead class="bg-slate-900/50 text-slate-400 border-b border-slate-700 text-xs uppercase">
@@ -182,7 +188,7 @@
     </div>
   </div>
 
-  <!-- MODAL XEM TRƯỚC (PREVIEW) -->
+  <!-- MODALS -->
   <div id="previewModal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-4 hidden">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
       <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
@@ -195,7 +201,6 @@
     </div>
   </div>
 
-  <!-- MODAL BẢN SAO LƯU -->
   <div id="backupModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 hidden">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-700 pb-3">
@@ -213,7 +218,6 @@
     </div>
   </div>
 
-  <!-- MODAL DI CHUYỂN TỆP/THƯ MỤC -->
   <div id="moveModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 hidden">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
       <h3 class="text-md font-bold text-amber-400 flex items-center gap-2 border-b border-slate-700 pb-2">
@@ -241,12 +245,11 @@
     let selectedFileIds = new Set();
     let moveTargetItemIds = [];
 
-    // Cache quản lý URL Blob xem trước
     const previewCache = new Map();
     const MAX_PREVIEW_CACHE = 5;
 
-    const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB/chunk phù hợp với Telegram Bot API
-    const CONCURRENCY_LIMIT = 4; // Tối đa 4 luồng tải song song cùng lúc chống 429 Rate Limit
+    const CHUNK_SIZE = 10 * 1024 * 1024;
+    const CONCURRENCY_LIMIT = 4;
 
     window.onload = async () => {
       setupDragAndDrop();
@@ -257,9 +260,7 @@
       }
     };
 
-    // TÍCH HỢP TÍNH NĂNG KÉO THẢ FILE (DRAG AND DROP)
     function setupDragAndDrop() {
-      const dropZone = document.getElementById('dropZone');
       const dragOverlay = document.getElementById('dragOverlay');
 
       window.addEventListener('dragover', (e) => {
@@ -349,7 +350,7 @@
       const timeStr = new Date().toLocaleString('vi-VN');
 
       try {
-        const res = await fetch('/api/save-backup', {
+        await fetch('/api/save-backup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -358,14 +359,53 @@
             backupData: JSON.stringify(dbFiles)
           })
         });
-
-        const resData = await res.json();
-        if (resData.success) {
-          console.log("Đã tự động sao lưu hệ thống.");
-        }
       } catch (err) {
         console.error("Lỗi truyền tải sao lưu!", err);
       }
+    }
+
+    function exportBackupToFile() {
+      if (!dbFiles || dbFiles.length === 0) {
+        return alert("Chưa có dữ liệu nào để xuất sao lưu!");
+      }
+
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dbFiles, null, 2));
+      const downloadAnchor = document.createElement('a');
+      const timeStamp = new Date().toISOString().slice(0, 10);
+      
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `backup_${CURRENT_MTB}_${timeStamp}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    function importBackupFromFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        try {
+          const importedData = JSON.parse(e.target.result);
+          if (Array.isArray(importedData)) {
+            if (confirm(`Bạn có muốn ghi đè hệ thống bằng bản sao lưu (${importedData.length} mục) từ file này?`)) {
+              dbFiles = importedData;
+              renderBreadcrumb();
+              applyFilters();
+              updateStorageUsage();
+              await manualBackupToSheet();
+              alert("🎉 Nhập dữ liệu sao lưu thành công!");
+            }
+          } else {
+            alert("❌ Định dạng file JSON sao lưu không hợp lệ!");
+          }
+        } catch (err) {
+          alert("❌ Không thể đọc file JSON! Chi tiết lỗi: " + err.message);
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
     }
 
     function handleFileSelect(e) {
@@ -373,7 +413,6 @@
       if (files.length > 0) startBatchUploadQueue(files);
     }
 
-    // UPLOAD TỆP CHIA MẢNH CHỐNG TRÀN RAM
     async function startBatchUploadQueue(files) {
       if (!files || files.length === 0) return;
 
@@ -435,11 +474,9 @@
       progressModal.classList.add('hidden');
     }
 
-    // THUẬT TOÁN DOWNLOADING CONCURRENCY QUEUE (TẢI TỐI ĐA 4 LUỒNG CHỐNG RATE LIMIT 429)
     async function fetchChunksWithLimit(chunks, filename, limit = CONCURRENCY_LIMIT) {
       const results = new Array(chunks.length);
       let executing = [];
-      let index = 0;
 
       for (let i = 0; i < chunks.length; i++) {
         const chunkId = chunks[i];
@@ -466,7 +503,6 @@
       return results;
     }
 
-    // TẢI FILE SỬ DỤNG LUỒNG GIỚI HẠN
     async function fetchFileBlobFromItem(item) {
       if (previewCache.has(item.id)) {
         return previewCache.get(item.id);
@@ -486,7 +522,6 @@
       return objectUrl;
     }
 
-    // XEM TRƯỚC TỆP (PREVIEW)
     async function previewFile(id) {
       const item = dbFiles.find(f => f.id === id);
       if (!item || item.isFolder) return;
@@ -497,7 +532,7 @@
 
       modal.classList.remove('hidden');
       title.innerText = `📄 Xem trước: ${item.name}`;
-      body.innerHTML = `<div class="text-center text-indigo-400 text-sm animate-pulse">⏳ Đang tải an toàn các mảnh file (tối đa 4 luồng)...</div>`;
+      body.innerHTML = `<div class="text-center text-indigo-400 text-sm animate-pulse">⏳ Đang tải an toàn các mảnh file...</div>`;
 
       try {
         const objectUrl = await fetchFileBlobFromItem(item);
@@ -531,7 +566,7 @@
       document.getElementById('previewModal').classList.add('hidden');
     }
 
-    // TẢI VỀ 1 TỆP
+    // --- SỬA TRIỆT ĐỂ LỖI KHÔNG TẢI XUỐNG ĐƯỢC FILE ---
     async function downloadSingleFile(id) {
       const item = dbFiles.find(f => f.id === id);
       if (!item || item.isFolder) return;
@@ -541,15 +576,31 @@
         const a = document.createElement('a');
         a.href = objectUrl;
         a.download = item.name;
+        a.style.display = 'none';
         document.body.appendChild(a);
+        
+        // Trigger tải file
         a.click();
-        document.body.removeChild(a);
+        
+        setTimeout(() => {
+          document.body.removeChild(a);
+        }, 100);
       } catch (err) {
-        alert("❌ Lỗi khi tải tệp!");
+        alert("❌ Lỗi khi tải tệp: " + err.message);
       }
     }
 
-    // ĐỔI TÊN TỆP HOẶC THƯ MỤC
+    async function downloadSelectedItems() {
+      const itemsToDownload = dbFiles.filter(f => selectedFileIds.has(f.id) && !f.isFolder);
+      if (itemsToDownload.length === 0) return alert("Không có tệp nào được chọn để tải!");
+
+      for (let i = 0; i < itemsToDownload.length; i++) {
+        await downloadSingleFile(itemsToDownload[i].id);
+        // Tránh bị browser chặn tải nhiều tệp liên tục bằng cách delay 500ms giữa mỗi tệp
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
     function renameItem(id) {
       const item = dbFiles.find(f => f.id === id);
       if (!item) return;
@@ -562,7 +613,6 @@
       }
     }
 
-    // DI CHUYỂN TỆP HOẶC THƯ MỤC
     function openMoveModal(id) {
       moveTargetItemIds = [id];
       renderFolderOptions();
@@ -581,7 +631,7 @@
       const folders = dbFiles.filter(f => f.isFolder && !moveTargetItemIds.includes(f.id));
 
       select.innerHTML = `<option value="null">🏠 Trang Chủ (Root)</option>` +
-        folders.map(f => `<option value="${f.id}">📁 ${f.name}</option>`).join('');
+        folders.map(f => `<option value="${f.id}">📁 ${escapeHtml(f.name)}</option>`).join('');
     }
 
     function closeMoveModal() {
@@ -606,7 +656,6 @@
       manualBackupToSheet();
     }
 
-    // LỌC VÀ SẮP XẾP DANH SÁCH TỆP
     function applyFilters() {
       const searchQuery = document.getElementById('searchInput').value.trim().toLowerCase();
       const typeFilter = document.getElementById('typeFilter').value;
@@ -614,12 +663,10 @@
 
       let items = getCurrentFolderItems();
 
-      // 1. Tìm kiếm
       if (searchQuery) {
         items = items.filter(f => f.name.toLowerCase().includes(searchQuery));
       }
 
-      // 2. Lọc theo loại tệp
       if (typeFilter !== 'all') {
         items = items.filter(f => {
           if (typeFilter === 'folder') return f.isFolder;
@@ -633,7 +680,6 @@
         });
       }
 
-      // 3. Sắp xếp
       items.sort((a, b) => {
         if (a.isFolder && !b.isFolder) return -1;
         if (!a.isFolder && b.isFolder) return 1;
@@ -650,7 +696,6 @@
       renderFiles(items);
     }
 
-    // THAO TÁC CHỌN NHIỀU (MULTI-SELECT)
     function toggleSelectAll(masterCheckbox) {
       const currentItems = getCurrentFolderItems();
       selectedFileIds.clear();
@@ -688,21 +733,40 @@
       }
     }
 
-    async function downloadSelectedItems() {
-      const itemsToDownload = dbFiles.filter(f => selectedFileIds.has(f.id) && !f.isFolder);
-      if (itemsToDownload.length === 0) return alert("Không có tệp nào được chọn để tải!");
+    function getRecursiveIdsToDelete(itemIds) {
+      let idsToDelete = new Set(itemIds);
+      let addedMore = true;
 
-      for (const item of itemsToDownload) {
-        await downloadSingleFile(item.id);
+      while (addedMore) {
+        addedMore = false;
+        dbFiles.forEach(item => {
+          if (item.parentId && idsToDelete.has(item.parentId) && !idsToDelete.has(item.id)) {
+            idsToDelete.add(item.id);
+            addedMore = true;
+          }
+        });
       }
+      return idsToDelete;
     }
 
     function deleteSelectedItems() {
       if (selectedFileIds.size === 0) return;
-      if (confirm(`Bạn có chắc chắn muốn xóa ${selectedFileIds.size} mục đã chọn?`)) {
-        dbFiles = dbFiles.filter(item => !selectedFileIds.has(item.id));
+      if (confirm(`Bạn có chắc chắn muốn xóa ${selectedFileIds.size} mục đã chọn (bao gồm thư mục con)?`)) {
+        const allIdsToDelete = getRecursiveIdsToDelete(Array.from(selectedFileIds));
+        dbFiles = dbFiles.filter(item => !allIdsToDelete.has(item.id));
         selectedFileIds.clear();
         updateMultiSelectToolbar();
+        applyFilters();
+        updateStorageUsage();
+        manualBackupToSheet();
+      }
+    }
+
+    function deleteSingleItem(id) {
+      if (confirm("Bạn có chắc muốn xóa mục này?")) {
+        const allIdsToDelete = getRecursiveIdsToDelete([id]);
+        dbFiles = dbFiles.filter(f => !allIdsToDelete.has(f.id));
+        selectedFileIds.delete(id);
         applyFilters();
         updateStorageUsage();
         manualBackupToSheet();
@@ -755,8 +819,8 @@
       path = path.concat(tempStack);
       breadcrumbBar.innerHTML = path.map((node, index) => {
         return index === path.length - 1
-          ? `<span class="font-bold text-indigo-400">${node.name}</span>`
-          : `<button onclick="openFolder(${node.id ? `'${node.id}'` : 'null'})" class="hover:text-indigo-300 font-medium">${node.name}</button> <span class="text-slate-500">/</span>`;
+          ? `<span class="font-bold text-indigo-400">${escapeHtml(node.name)}</span>`
+          : `<button onclick="openFolder(${node.id ? `'${node.id}'` : 'null'})" class="hover:text-indigo-300 font-medium">${escapeHtml(node.name)}</button> <span class="text-slate-500">/</span>`;
       }).join(' ');
     }
 
@@ -789,7 +853,7 @@
                    <button onclick="downloadSingleFile('${item.id}')" class="bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 px-2 py-1 rounded-lg text-xs font-semibold">📥 Tải</button>`
               }
               <button onclick="renameItem('${item.id}')" class="bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/30 px-2 py-1 rounded-lg text-xs font-semibold">✏️ Đổi tên</button>
-              <button onclick="openMoveModal('${item.id}')" class="bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 border border-amber-500/30 px-2 py-1 rounded-lg text-xs font-semibold">🚚 Di chuyển</button>
+              <button onclick="openMoveModal('${item.id}')" class="bg-amber-600/20 hover:bg-amber-500/40 text-amber-300 border border-amber-500/30 px-2 py-1 rounded-lg text-xs font-semibold">🚚 Di chuyển</button>
               <button onclick="deleteSingleItem('${item.id}')" class="bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 px-2 py-1 rounded-lg text-xs font-semibold">🗑️</button>
             </td>
           </tr>`;
@@ -857,14 +921,6 @@
       }
     }
 
-    function deleteSingleItem(id) {
-      dbFiles = dbFiles.filter(f => f.id !== id);
-      selectedFileIds.delete(id);
-      applyFilters();
-      updateStorageUsage();
-      manualBackupToSheet();
-    }
-
     function updateStorageUsage() {
       const maxBytes = MAX_STORAGE_GB * 1024 * 1024 * 1024;
       const totalBytes = dbFiles.reduce((sum, item) => sum + (item.size || 0), 0);
@@ -880,7 +936,7 @@
     }
 
     function getFileExtension(filename) {
-      return filename.split('.').pop().toLowerCase();
+      return filename ? filename.split('.').pop().toLowerCase() : '';
     }
 
     function getMimeType(filename) {
@@ -894,7 +950,7 @@
     }
 
     function escapeHtml(text) {
-      return text.replace(/[&<>"']/g, function(m) {
+      return String(text || '').replace(/[&<>"']/g, function(m) {
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
       });
     }
