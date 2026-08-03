@@ -233,12 +233,10 @@
 
   <script>
     const AUTH_API_URL = "/api/login";
-    
-    // 🛑 ĐÃ CẬP NHẬT ĐƯỜNG DẪN WEB APP GOOGLE SHEET SAO LƯU MỚI
     const BACKUP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw0EdS-qSOA2PpemKa2sdZ4QghxdikvXreCvuWwAfK_Q-nIGDg-9No0qLHfiLb3kyWFbQ/exec";
 
-    const CHUNK_SIZE = 10 * 1024 * 1024; // Cố định 10MB mỗi mảnh
-    const MAX_CACHE_SIZE = 5; // Giới hạn tối đa 5 file cache trong RAM trình duyệt
+    const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB
+    const MAX_CACHE_SIZE = 5;
 
     let CURRENT_MTB = localStorage.getItem('cur_mtb') || null;
     let BOT_TOKEN = localStorage.getItem('cur_token') || null;
@@ -326,6 +324,7 @@
       document.getElementById('warningModal').classList.add('hidden');
     }
 
+    // 🌟 TỰ ĐỘNG LẤY BẢN SAO LƯU MỚI NHẤT TRÊN CÙNG KHI MỚI VÀO / REFRESH
     async function autoFetchLatestBackupOnStart() {
       if (!CURRENT_MTB) return;
       try {
@@ -333,7 +332,8 @@
         const listData = await res.json();
 
         if (listData && listData.length > 0) {
-          const latestItem = listData[listData.length - 1];
+          // listData[0] luôn luôn là bản mới nhất do Backend đã sắp xếp
+          const latestItem = listData[0];
           const fullJsonData = latestItem.mainData || latestItem.backupData;
           
           if (fullJsonData) {
@@ -923,6 +923,7 @@
       }
     }
 
+    // 🌟 HIỂN THỊ MODAL DANH SÁCH BẢN SAO LƯU VỚI BẢN MỚI NHẤT TRÊN CÙNG (NỔI BẬT XANH)
     async function openBackupHistoryModal() {
       const modal = document.getElementById('backupModal');
       const container = document.getElementById('backupListContainer');
@@ -938,17 +939,19 @@
           return;
         }
 
-        const recentBackups = listData.slice().reverse();
-
-        container.innerHTML = recentBackups.map((item, index) => {
+        container.innerHTML = listData.map((item, index) => {
           const fullJsonData = item.mainData || item.backupData;
           const encodedData = encodeURIComponent(fullJsonData);
+          const isFirst = index === 0;
           
           return `
-            <div class="bg-slate-900 border border-purple-500/30 p-3.5 rounded-xl space-y-2.5">
+            <div class="bg-slate-900 border ${isFirst ? 'border-emerald-500/80 shadow-lg shadow-emerald-500/10' : 'border-purple-500/30'} p-3.5 rounded-xl space-y-2.5 relative">
               <div class="flex items-center justify-between">
-                <div>
-                  <div class="text-xs font-bold text-slate-100">🕒 ${item.time}</div>
+                <div class="flex items-center gap-2">
+                  <div class="text-xs font-bold ${isFirst ? 'text-emerald-400' : 'text-slate-100'}">
+                    🕒 ${item.time}
+                  </div>
+                  ${isFirst ? '<span class="bg-emerald-500/20 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full font-bold border border-emerald-500/40 animate-pulse">🌟 MỚI NHẤT</span>' : ''}
                 </div>
                 <span class="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded border border-purple-500/30">
                   MTB: ${CURRENT_MTB}
@@ -956,7 +959,7 @@
               </div>
 
               <div class="flex justify-end pt-1">
-                <button onclick="applyBackupFromCloud('${encodedData}')" class="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1.5 rounded-lg font-semibold transition flex items-center gap-1">
+                <button onclick="applyBackupFromCloud('${encodedData}')" class="${isFirst ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-purple-600 hover:bg-purple-500'} text-white text-xs px-3 py-1.5 rounded-lg font-semibold transition flex items-center gap-1">
                   📥 Khôi Phục Bản Lưu Này
                 </button>
               </div>
