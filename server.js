@@ -9,7 +9,7 @@ const { pipeline } = require('stream');
 
 const app = express();
 
-// 1. Dùng diskStorage lưu tạm vào đĩa /tmp/ thay vì RAM (MemoryStorage)
+// Dùng diskStorage lưu tạm vào đĩa /tmp/ thay vì RAM (MemoryStorage)
 const upload = multer({ dest: '/tmp/' });
 
 app.use(cors());
@@ -19,8 +19,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const AUTH_API_URL = process.env.AUTH_API_URL || "https://script.google.com/macros/s/AKfycbw-RDeNdYzo7dMnmMRUV2jLkUSCmIN5Fk87suroVvo_bYjyyO05HEKXUcPyf_RLQ_A/exec";
 
-// 🛑 ĐÃ CẬP NHẬT ĐƯỜNG DẪN APPS SCRIPT DỰ PHÒNG GOOGLE SHEET MỚI
-const BACKUP_SCRIPT_URL = process.env.BACKUP_SCRIPT_URL || "https://script.google.com/macros/s/AKfycby1cykTfz4jerGHDsm8Udjco2EfZMbDYTQ8PTDjXXjyQmDRAejx1N5vA-jKpnmLupqlBw/exec";
+// 🛑 ĐÃ CẬP NHẬT ĐƯỜNG DẪN WEB APP GOOGLE SHEET SAO LƯU MỚI CỦA BẠN
+const BACKUP_SCRIPT_URL = process.env.BACKUP_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbw0EdS-qSOA2PpemKa2sdZ4QghxdikvXreCvuWwAfK_Q-nIGDg-9No0qLHfiLb3kyWFbQ/exec";
 
 // Lưu giữ ID của tin nhắn CSDL cố định để thực hiện sửa tin nhắn (Edit Message)
 let pinnedDbMessageId = null;
@@ -70,7 +70,7 @@ app.get('/api/backup', async (req, res) => {
   }
 });
 
-// 3. API Upload Chunk (Đã tối ưu RAM < 80MB & Tự động xóa file tạm fs.unlinkSync)
+// 3. API Upload Chunk (Tối ưu RAM < 80MB & Tự động xóa file tạm fs.unlinkSync)
 app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   try {
     const { token, chatId } = req.body;
@@ -198,7 +198,7 @@ app.post('/api/save-backup', async (req, res) => {
   try {
     await fetch(BACKUP_SCRIPT_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(req.body)
     });
     res.json({ success: true });
