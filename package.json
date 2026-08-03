@@ -1,7 +1,6 @@
 {
-  "name": "cloud-storage-vip",
+  "name": "cloud-storage",
   "version": "1.0.0",
-  "description": "Cloud Storage System",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -12,6 +11,6 @@
     "form-data": "^4.0.0",
     "multer": "^1.4.5-lts.1",
     "node-cron": "^3.0.3",
-    "node-fetch": "^2.6.11"
+    "node-fetch": "^2.7.0"
   }
 }
