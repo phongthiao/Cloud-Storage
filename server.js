@@ -4,51 +4,47 @@ const multer = require('multer');
 const fetch = require('node-fetch');
 const FormData = require('form-data');
 const path = require('path');
-const fs = require('fs');
 const { pipeline } = require('stream');
-const cron = require('node-cron');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_cloud_storage_key_2026';
+const AUTH_API_URL = process.env.AUTH_API_URL || "https://script.google.com/macros/s/AKfycbw-RDeNdYzo7dMnmMRUV2jLkUSCmIN5Fk87suroVvo_bYjyyO05HEKXUcPyf_RLQ_A/exec";
+const BACKUP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyxpDyYr4IuQgWFTnQV6DDtrtWKDDjKiPYKjOSxgfL2PIDNCRNco5-v7OYux4wVFL-D/exec";
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => cb(null, `chunk_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.dat`)
+// Lưu trữ Chunk trực tiếp trên RAM (tránh rò rỉ ổ cứng Server)
+const upload = multer({ 
+  storage: multer.memoryStorage(), 
+  limits: { fileSize: 200 * 1024 * 1024 } 
 });
-const upload = multer({ storage: storage, limits: { fileSize: 200 * 1024 * 1024 } });
 
 app.use(cors());
 app.use(express.json({ limit: '200mb' }));
 app.use(express.urlencoded({ limit: '200mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-const AUTH_API_URL = process.env.AUTH_API_URL || "https://script.google.com/macros/s/AKfycbw-RDeNdYzo7dMnmMRUV2jLkUSCmIN5Fk87suroVvo_bYjyyO05HEKXUcPyf_RLQ_A/exec";
-const BACKUP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyxpDyYr4IuQgWFTnQV6DDtrtWKDDjKiPYKjOSxgfL2PIDNCRNco5-v7OYux4wVFL-D/exec";
-
-let SYSTEM_BOT_TOKEN = process.env.BOT_TOKEN || "";
-let SYSTEM_CHAT_ID = process.env.CHAT_ID || "";
-
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-cron.schedule('*/30 * * * *', () => {
-  fs.readdir(uploadDir, (err, files) => {
-    if (err) return;
-    const now = Date.now();
-    files.forEach(file => {
-      const filePath = path.join(uploadDir, file);
-      fs.stat(filePath, (err, stats) => {
-        if (!err && now - stats.mtimeMs > 3600000) {
-          fs.unlink(filePath, () => {});
-        }
-      });
-    });
-  });
-});
+// Middleware xác thực JWT Token từ Client
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
 
+  if (!token) {
+    return res.status(401).json({ success: false, message: "Thiếu Session Token hoặc chưa đăng nhập" });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ success: false, message: "Session đã hết hạn hoặc không hợp lệ" });
+    }
+    req.user = user;
+    next();
+  });
+};
+
+// API Đăng nhập
 app.post('/api/login', async (req, res) => {
   try {
     const response = await fetch(AUTH_API_URL, {
@@ -59,13 +55,18 @@ app.post('/api/login', async (req, res) => {
     const data = await response.json();
 
     if (data.success) {
-      SYSTEM_BOT_TOKEN = data.token;
-      SYSTEM_CHAT_ID = data.chatId;
+      // Mã hóa thông tin bot_token và chatId riêng biệt cho từng người dùng vào JWT
+      const sessionToken = jwt.sign({
+        token: data.token || process.env.BOT_TOKEN || "",
+        chatId: data.chatId || process.env.CHAT_ID || "",
+        mtb: req.body.mtb
+      }, JWT_SECRET, { expiresIn: '7d' });
 
       res.json({
         success: true,
         maxGb: data.maxGb || 5,
-        mtb: req.body.mtb
+        mtb: req.body.mtb,
+        sessionToken: sessionToken
       });
     } else {
       res.json(data);
@@ -75,6 +76,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// Các API Backup
 app.get('/api/backup', async (req, res) => {
   try {
     const { mtb } = req.query;
@@ -100,11 +102,10 @@ app.post('/api/save-backup', async (req, res) => {
   }
 });
 
-app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
-  const filePath = req.file ? req.file.path : null;
+// API Upload Chunk lên Telegram với chống Rate Limit & Memory Buffer
+app.post('/api/upload-chunk', authenticateToken, upload.single('document'), async (req, res) => {
   try {
-    const token = SYSTEM_BOT_TOKEN;
-    const chatId = SYSTEM_CHAT_ID;
+    const { token, chatId } = req.user;
 
     if (!token || !chatId || !req.file) {
       return res.status(400).json({ success: false, message: "Thiếu dữ liệu upload hoặc Server chưa đăng nhập" });
@@ -116,7 +117,7 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
     while (attempts < 5) {
       const formData = new FormData();
       formData.append('chat_id', chatId);
-      formData.append('document', fs.createReadStream(filePath), req.file.originalname);
+      formData.append('document', req.file.buffer, { filename: req.file.originalname });
 
       const tgRes = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
         method: 'POST',
@@ -142,18 +143,14 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
 
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
-  } finally {
-    if (filePath && fs.existsSync(filePath)) {
-      try { fs.unlinkSync(filePath); } catch (e) {}
-    }
   }
 });
 
-// Proxy lấy Chunk từ Telegram với Retry nội bộ
-app.get('/api/file-proxy', async (req, res) => {
+// Proxy lấy Chunk từ Telegram an toàn
+app.get('/api/file-proxy', authenticateToken, async (req, res) => {
   try {
     const { fileId, filename } = req.query;
-    const token = SYSTEM_BOT_TOKEN;
+    const { token } = req.user;
 
     if (!token || !fileId) return res.status(400).send("Thiếu thông số hoặc chưa đăng nhập");
 
