@@ -4,13 +4,15 @@ const multer = require('multer');
 const fetch = require('node-fetch');
 const FormData = require('form-data');
 const path = require('path');
-const { pipeline } = require('stream');
+const { pipeline, PassThrough } = require('stream');
 
 const app = express();
-const upload = multer({ storage: multer.memoryStorage() });
+
+// SỬA LỖI 1: Không dùng memoryStorage. Dùng diskStorage với thư mục tạm
+// hoặc stream trực tiếp để tránh chiếm dụng RAM Render.
+const upload = multer({ dest: '/tmp/' });
 
 app.use(cors());
-// Tăng giới hạn payload lên 200mb để đảm bảo lưu database lớn không bị lỗi
 app.use(express.json({ limit: '200mb' }));
 app.use(express.urlencoded({ limit: '200mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -18,7 +20,28 @@ app.use(express.static(path.join(__dirname, 'public')));
 const AUTH_API_URL = process.env.AUTH_API_URL || "https://script.google.com/macros/s/AKfycbw-RDeNdYzo7dMnmMRUV2jLkUSCmIN5Fk87suroVvo_bYjyyO05HEKXUcPyf_RLQ_A/exec";
 const BACKUP_SCRIPT_URL = process.env.BACKUP_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbyMkD7y_bCC4l27JZgn5bzmWpch_ZTH208YzapDTw6nMIC4CXD9lUJJ2ccq3wqcsmhLeA/exec";
 
-// 1. API Xác thực Đăng Nhập[cite: 5]
+// Lưu giữ ID của tin nhắn CSDL cố định để thực hiện sửa tin nhắn (Edit Message)
+let pinnedDbMessageId = null;
+
+// SỬA LỖI 2: Hàm Bắt Lỗi 429 Rate Limit & Tự động Sleep (Retry_after)
+async function fetchTelegramWithRetry(url, options, maxRetries = 5) {
+  for (let i = 0; i < maxRetries; i++) {
+    const res = await fetch(url, options);
+    const data = await res.json();
+
+    if (res.status === 429 || (data && !data.ok && data.error_code === 429)) {
+      const retryAfter = (data.parameters && data.parameters.retry_after) ? data.parameters.retry_after : 3;
+      console.warn(`[Telegram Rate Limit 429] Cảnh báo gửi quá nhanh. Đang tạm dừng (sleep) ${retryAfter}s trước khi gửi lại...`);
+      await new Promise(resolve => setTimeout(resolve, (retryAfter + 1) * 1000));
+      continue; // Thử lại request
+    }
+
+    return data;
+  }
+  throw new Error("Vượt quá số lần thử lại Telegram API do Rate Limit.");
+}
+
+// 1. API Xác thực Đăng Nhập
 app.post('/api/login', async (req, res) => {
   try {
     const response = await fetch(AUTH_API_URL, {
@@ -33,7 +56,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// 2. API Lấy Bản Sao Lưu[cite: 5]
+// 2. API Lấy Bản Sao Lưu
 app.get('/api/backup', async (req, res) => {
   try {
     const { mtb } = req.query;
@@ -45,8 +68,9 @@ app.get('/api/backup', async (req, res) => {
   }
 });
 
-// 3. API Upload Chunk[cite: 5]
+// 3. API Upload Chunk (SỬA LỖI 1 & 2: Nhận Stream trực tiếp, Xử lý 429)
 app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
+  const fs = require('fs');
   try {
     const { token, chatId } = req.body;
     const file = req.file;
@@ -58,32 +82,35 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
     const datFileName = `data_chunk_${Date.now()}_${Math.floor(Math.random() * 10000)}.dat`;
     const formData = new FormData();
     formData.append('chat_id', chatId);
-    formData.append('document', file.buffer, datFileName);
+    // Tạo ReadStream từ ổ đĩa tạm để đẩy thẳng lên Telegram, xóa ngay khỏi RAM
+    formData.append('document', fs.createReadStream(file.path), datFileName);
 
-    const tgRes = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+    const tgData = await fetchTelegramWithRetry(`https://api.telegram.org/bot${token}/sendDocument`, {
       method: 'POST',
       body: formData
     });
 
-    const tgData = await tgRes.json();
+    // Dọn dẹp tệp tạm trên ổ đĩa
+    fs.unlink(file.path, () => {});
+
     if (tgData.ok && tgData.result.document) {
       res.json({ success: true, file_id: tgData.result.document.file_id });
     } else {
       res.status(400).json({ success: false, message: tgData.description || "Lỗi tải lên Telegram" });
     }
   } catch (err) {
+    if (req.file && req.file.path) fs.unlink(req.file.path, () => {});
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// 4. API Proxy Tải File / Ghép File từ Telegram (Đã cải tiến dùng pipeline an toàn)[cite: 5]
+// 4. API Proxy Tải File từ Telegram
 app.get('/api/file-proxy', async (req, res) => {
   try {
     const { token, fileId, filename } = req.query;
     if (!token || !fileId) return res.status(400).send("Thiếu tham số");
 
-    const infoRes = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`);
-    const infoData = await infoRes.json();
+    const infoData = await fetchTelegramWithRetry(`https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`);
 
     if (!infoData.ok) return res.status(400).send("Không lấy được link file");
 
@@ -103,13 +130,8 @@ app.get('/api/file-proxy', async (req, res) => {
     }
 
     res.setHeader('Content-Type', contentType);
-    if (filename) {
-      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(filename)}"`);
-    } else {
-      res.setHeader('Content-Disposition', 'inline');
-    }
+    res.setHeader('Content-Disposition', filename ? `inline; filename="${encodeURIComponent(filename)}"` : 'inline');
 
-    // Sử dụng pipeline chuẩn hóa để tránh treo kết nối Stream
     pipeline(fileStream.body, res, (err) => {
       if (err && err.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
         console.error('Lỗi đường ống truyền tải Stream:', err);
@@ -120,40 +142,56 @@ app.get('/api/file-proxy', async (req, res) => {
   }
 });
 
-// 5. API Ghim CSDL lên Telegram[cite: 5]
+// 5. API Lưu CSDL lên Telegram (SỬA LỖI 4: Chuyển sang Cập Nhật / Edit Tin Nhắn Cố Định)
 app.post('/api/pin-db', async (req, res) => {
   try {
-    const { token, chatId, mtb, dbData } = req.body;
+    const { token, chatId, mtb, dbData, msgId } = req.body;
     const blob = Buffer.from(JSON.stringify(dbData));
+    const targetMsgId = msgId || pinnedDbMessageId;
 
+    if (targetMsgId) {
+      // Nếu đã có ID tin nhắn trước đó -> Dùng editMessageMedia để sửa tin nhắn hiện tại
+      const formData = new FormData();
+      formData.append('chat_id', chatId);
+      formData.append('message_id', targetMsgId);
+      formData.append('media', JSON.stringify({
+        type: 'document',
+        media: `attach://database_${mtb}.json`
+      }));
+      formData.append(`database_${mtb}.json`, blob, `database_${mtb}.json`);
+
+      const editRes = await fetchTelegramWithRetry(`https://api.telegram.org/bot${token}/editMessageMedia`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (editRes.ok) {
+        return res.json({ success: true, msgId: targetMsgId, updated: true });
+      }
+    }
+
+    // Nếu chưa có tin nhắn cố định (hoặc edit thất bại do tin nhắn bị xóa) -> Gửi tin nhắn mới lần đầu
     const formData = new FormData();
     formData.append('chat_id', chatId);
     formData.append('document', blob, `database_${mtb}.json`);
 
-    const tgRes = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+    const tgData = await fetchTelegramWithRetry(`https://api.telegram.org/bot${token}/sendDocument`, {
       method: 'POST',
       body: formData
     });
 
-    const tgData = await tgRes.json();
     if (tgData.ok && tgData.result.message_id) {
-      await fetch(`https://api.telegram.org/bot${token}/pinChatMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          message_id: tgData.result.message_id,
-          disable_notification: true
-        })
-      });
+      pinnedDbMessageId = tgData.result.message_id;
+      res.json({ success: true, msgId: pinnedDbMessageId, updated: false });
+    } else {
+      res.status(400).json({ success: false });
     }
-    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false });
   }
 });
 
-// 6. API Xuất Sao Lưu Cloud Drive[cite: 5]
+// 6. API Xuất Sao Lưu Cloud Drive
 app.post('/api/save-backup', async (req, res) => {
   try {
     await fetch(BACKUP_SCRIPT_URL, {
