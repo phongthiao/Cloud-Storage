@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cloud Storage - Ultimate Edition</title>
+  <title>Cloud Storage - Fixed Download Version</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen p-4 sm:p-6 font-sans select-none" id="dropZone">
@@ -55,7 +55,7 @@
           <p class="text-xs text-slate-400 mt-1">Tải song song tốc độ cao • Hỗ trợ Kéo - Thả • Tải siêu mượt</p>
         </div>
         
-        <!-- Thanh Điều Hướng (Đã thêm Xuất / Nhập Sao Lưu) -->
+        <!-- Thanh Điều Hướng -->
         <div class="flex flex-wrap items-center gap-2">
           <span id="userInfoBadge" class="text-xs bg-indigo-500/20 text-indigo-300 px-3 py-2 rounded-xl border border-indigo-500/30 font-mono">Thiết bị: ...</span>
 
@@ -350,7 +350,7 @@
       const timeStr = new Date().toLocaleString('vi-VN');
 
       try {
-        const res = await fetch('/api/save-backup', {
+        await fetch('/api/save-backup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -359,17 +359,11 @@
             backupData: JSON.stringify(dbFiles)
           })
         });
-
-        const resData = await res.json();
-        if (resData.success) {
-          console.log("Đã tự động sao lưu hệ thống.");
-        }
       } catch (err) {
         console.error("Lỗi truyền tải sao lưu!", err);
       }
     }
 
-    // --- TÍNH NĂNG MỚI: XUẤT VÀ NHẬP SAO LƯU FILE LOCAL ---
     function exportBackupToFile() {
       if (!dbFiles || dbFiles.length === 0) {
         return alert("Chưa có dữ liệu nào để xuất sao lưu!");
@@ -411,7 +405,7 @@
         }
       };
       reader.readAsText(file);
-      event.target.value = ''; // Reset input file
+      event.target.value = '';
     }
 
     function handleFileSelect(e) {
@@ -572,6 +566,7 @@
       document.getElementById('previewModal').classList.add('hidden');
     }
 
+    // --- SỬA TRIỆT ĐỂ LỖI KHÔNG TẢI XUỐNG ĐƯỢC FILE ---
     async function downloadSingleFile(id) {
       const item = dbFiles.find(f => f.id === id);
       if (!item || item.isFolder) return;
@@ -581,11 +576,28 @@
         const a = document.createElement('a');
         a.href = objectUrl;
         a.download = item.name;
+        a.style.display = 'none';
         document.body.appendChild(a);
+        
+        // Trigger tải file
         a.click();
-        document.body.removeChild(a);
+        
+        setTimeout(() => {
+          document.body.removeChild(a);
+        }, 100);
       } catch (err) {
-        alert("❌ Lỗi khi tải tệp!");
+        alert("❌ Lỗi khi tải tệp: " + err.message);
+      }
+    }
+
+    async function downloadSelectedItems() {
+      const itemsToDownload = dbFiles.filter(f => selectedFileIds.has(f.id) && !f.isFolder);
+      if (itemsToDownload.length === 0) return alert("Không có tệp nào được chọn để tải!");
+
+      for (let i = 0; i < itemsToDownload.length; i++) {
+        await downloadSingleFile(itemsToDownload[i].id);
+        // Tránh bị browser chặn tải nhiều tệp liên tục bằng cách delay 500ms giữa mỗi tệp
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
 
@@ -721,16 +733,6 @@
       }
     }
 
-    async function downloadSelectedItems() {
-      const itemsToDownload = dbFiles.filter(f => selectedFileIds.has(f.id) && !f.isFolder);
-      if (itemsToDownload.length === 0) return alert("Không có tệp nào được chọn để tải!");
-
-      for (const item of itemsToDownload) {
-        await downloadSingleFile(item.id);
-      }
-    }
-
-    // ĐÃ FIX: XÓA ĐỆ QUY TỆP VÀ THƯ MỤC CON BÊN TRONG
     function getRecursiveIdsToDelete(itemIds) {
       let idsToDelete = new Set(itemIds);
       let addedMore = true;
@@ -947,7 +949,6 @@
       return mimeTypes[ext] || 'application/octet-stream';
     }
 
-    // ĐÃ FIX LỖI ESCAPE HTML AN TOÀN
     function escapeHtml(text) {
       return String(text || '').replace(/[&<>"']/g, function(m) {
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
