@@ -19,7 +19,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // HẰNG SỐ & BIẾN TOÀN CỤC
 const AUTH_API_URL = process.env.AUTH_API_URL || "https://script.google.com/macros/s/AKfycbw-RDeNdYzo7dMnmMRUV2jLkUSCmIN5Fk87suroVvo_bYjyyO05HEKXUcPyf_RLQ_A/exec";
-const BACKUP_SCRIPT_URL = process.env.BACKUP_SCRIPT_URL || "https://script.google.com/macros/s/AKfycb0EdS-qSOA2PpemKa2sdZ4QghxdikvXreCvuWwAfK_Q-nIGDg-9No0qLHfiLb3kyWFbQ/exec";
+// Đã cập nhật URL Google Apps Script mới tại đây:
+const BACKUP_SCRIPT_URL = process.env.BACKUP_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbzF6WA_qNfFRf-ykoJFzq4Tj6USpW7Z2Sx-phdPf3u9WvBomyAYGcTyzNNHeazNmvY1Hg/exec";
 
 let pinnedDbMessageId = null;
 
