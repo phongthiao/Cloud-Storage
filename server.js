@@ -32,7 +32,7 @@ function safeUnlink(filePath) {
   }
 }
 
-// Hàm Bắt Lỗi 429 Rate Limit & Tự động Retry với AxIoS
+// Hàm Bắt Lỗi 429 Rate Limit & Tự động Retry với Axios
 async function requestTelegramWithRetry(url, method = 'GET', data = null, headers = {}, maxRetries = 5) {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
@@ -41,14 +41,14 @@ async function requestTelegramWithRetry(url, method = 'GET', data = null, header
         method,
         data,
         headers,
-        validateStatus: () => true // Không ném Exception nếu status >= 400
+        validateStatus: () => true
       });
 
       const resData = response.data;
 
       if (response.status === 429 || (resData && !resData.ok && resData.error_code === 429)) {
         const retryAfter = (resData.parameters && resData.parameters.retry_after) ? resData.parameters.retry_after : 3;
-        console.warn(`[Telegram Rate Limit 429] Tạm dừng (sleep) ${retryAfter}s trước khi gửi lại...`);
+        console.warn(`[Telegram Rate Limit 429] Tạm dừng ${retryAfter}s trước khi gửi lại...`);
         await new Promise(resolve => setTimeout(resolve, (retryAfter + 1) * 1000));
         continue;
       }
@@ -87,7 +87,7 @@ app.get('/api/backup', async (req, res, next) => {
   }
 });
 
-// 3. API Upload Chunk (Tối ưu RAM & Xóa Đĩa Tạm Chuẩn)
+// 3. API Upload Chunk
 app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   const file = req.file;
   
@@ -127,7 +127,7 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   }
 });
 
-// 4. API Proxy Tải File từ Telegram (Luồng Stream Direct Pipeline)
+// 4. API Proxy Tải File từ Telegram
 app.get('/api/file-proxy', async (req, res, next) => {
   try {
     const { token, fileId, filename } = req.query;
@@ -170,7 +170,7 @@ app.get('/api/file-proxy', async (req, res, next) => {
   }
 });
 
-// 5. API Lưu CSDL lên Telegram (Chỉnh sửa tin nhắn cố định - Edit Message)
+// 5. API Lưu CSDL lên Telegram
 app.post('/api/pin-db', async (req, res, next) => {
   try {
     const { token, chatId, mtb, dbData, msgId } = req.body;
@@ -223,7 +223,7 @@ app.post('/api/pin-db', async (req, res, next) => {
   }
 });
 
-// 6. API Xuất Sao Lưu Cloud Sheeet
+// 6. API Xuất Sao Lưu Cloud Sheet
 app.post('/api/save-backup', async (req, res, next) => {
   try {
     await axios.post(BACKUP_SCRIPT_URL, req.body, {
@@ -235,7 +235,7 @@ app.post('/api/save-backup', async (req, res, next) => {
   }
 });
 
-// MIDDLEWARE XỬ LÝ LỖI TẬP TRUNG (GLOBAL ERROR HANDLER)
+// MIDDLEWARE XỬ LÝ LỖI
 app.use((err, req, res, next) => {
   console.error('[Unhandled Server Error]:', err.stack || err.message);
   res.status(500).json({
