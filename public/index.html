@@ -366,14 +366,16 @@
         location.reload();
       }
 
+      // TỰ ĐỘNG CẬP NHẬT KHI MỞ/F5 TRANG WEB
       async function autoFetchLatestBackupOnStart() {
         if (!state.mtb) return;
         try {
-          const res = await fetch(`${CONFIG.BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(state.mtb)}`);
+          // Gửi GET lấy dòng mới nhất (dòng cuối cùng) và gộp chuỗi ô dữ liệu
+          const res = await fetch(`${CONFIG.BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(state.mtb)}&t=${Date.now()}`);
           const listData = await res.json();
 
           if (Array.isArray(listData) && listData.length > 0) {
-            const latestItem = listData[listData.length - 1];
+            const latestItem = listData[listData.length - 1]; // Lấy bản sao mới nhất ở cuối
             const fullJsonData = latestItem.mainData || latestItem.backupData;
             
             if (fullJsonData) {
@@ -422,9 +424,12 @@
         }
       }
 
+      // TỰ ĐỘNG CẮT VÀ SAO LƯU CHUỖI DỮ LIỆU LÊN GOOGLE SHEET (MAX 5 BẢN FIFO)
       async function autoExportBackupToCloud() {
         if (!state.mtb) return;
         const currentTimeStr = new Date().toLocaleString('vi-VN');
+        const jsonStr = JSON.stringify(state.dbFiles);
+
         try {
           await fetch(CONFIG.SAVE_BACKUP_URL, {
             method: 'POST',
@@ -432,7 +437,7 @@
             body: JSON.stringify({
               mtb: state.mtb,
               time: currentTimeStr,
-              backupData: JSON.stringify(state.dbFiles)
+              backupData: jsonStr
             })
           });
         } catch (err) {
@@ -1040,7 +1045,7 @@
         container.innerHTML = `<div class="text-center py-6 text-amber-400 text-xs font-semibold">⏳ Đang lấy danh sách bản sao lưu...</div>`;
 
         try {
-          const res = await fetch(`${CONFIG.BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(state.mtb)}`);
+          const res = await fetch(`${CONFIG.BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(state.mtb)}&t=${Date.now()}`);
           const listData = await res.json();
 
           if (!Array.isArray(listData) || listData.length === 0) {
