@@ -1,4 +1,243 @@
-<!DOCTYPE html>
+const express = require('express');
+const cors = require('cors');
+const multer = require('multer');
+const axios = require('axios');
+const FormData = require('form-data');
+const path = require('path');
+const fs = require('fs');
+const { pipeline } = require('stream');
+
+const app = express();
+
+// Cấu hình Multer lưu đĩa tạm thời
+const upload = multer({ dest: '/tmp/' });
+
+app.use(cors());
+app.use(express.json({ limit: '200mb' }));
+app.use(express.urlencoded({ limit: '200mb', extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
+
+// HẰNG SỐ & BIẾN TOÀN CỤC
+const AUTH_API_URL = process.env.AUTH_API_URL || "https://script.google.com/macros/s/AKfycbw-RDeNdYzo7dMnmMRUV2jLkUSCmIN5Fk87suroVvo_bYjyyO05HEKXUcPyf_RLQ_A/exec";
+const BACKUP_SCRIPT_URL = process.env.BACKUP_SCRIPT_URL || "https://script.google.com/macros/s/AKfycb0EdS-qSOA2PpemKa2sdZ4QghxdikvXreCvuWwAfK_Q-nIGDg-9No0qLHfiLb3kyWFbQ/exec";
+
+let pinnedDbMessageId = null;
+
+// Hàm An Toàn Xóa File Tạm
+function safeUnlink(filePath) {
+  if (filePath && fs.existsSync(filePath)) {
+    fs.unlink(filePath, (err) => {
+      if (err) console.error(`[FS Unlink Error] Không thể xóa file tạm ${filePath}:`, err);
+    });
+  }
+}
+
+// Hàm Bắt Lỗi 429 Rate Limit & Tự động Retry với Axios
+async function requestTelegramWithRetry(url, method = 'GET', data = null, headers = {}, maxRetries = 5) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await axios({
+        url,
+        method,
+        data,
+        headers,
+        validateStatus: () => true
+      });
+
+      const resData = response.data;
+
+      if (response.status === 429 || (resData && !resData.ok && resData.error_code === 429)) {
+        const retryAfter = (resData.parameters && resData.parameters.retry_after) ? resData.parameters.retry_after : 3;
+        console.warn(`[Telegram Rate Limit 429] Tạm dừng ${retryAfter}s trước khi gửi lại...`);
+        await new Promise(resolve => setTimeout(resolve, (retryAfter + 1) * 1000));
+        continue;
+      }
+
+      return resData;
+    } catch (err) {
+      if (attempt === maxRetries - 1) throw err;
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  }
+  throw new Error("Vượt quá số lần thử lại Telegram API do Rate Limit.");
+}
+
+// 1. API Xác thực Đăng Nhập
+app.post('/api/login', async (req, res, next) => {
+  try {
+    const response = await axios.post(AUTH_API_URL, req.body, {
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+    });
+    res.json(response.data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 2. API Lấy Bản Sao Lưu từ Google Sheet
+app.get('/api/backup', async (req, res, next) => {
+  try {
+    const { mtb } = req.query;
+    if (!mtb) return res.status(400).json({ error: "Thiếu mã thiết bị (mtb)" });
+
+    const response = await axios.get(`${BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(mtb)}&t=${Date.now()}`);
+    res.json(response.data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 3. API Upload Chunk
+app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
+  const file = req.file;
+  
+  try {
+    const { token, chatId } = req.body;
+
+    if (!token || !chatId || !file) {
+      if (file) safeUnlink(file.path);
+      return res.status(400).json({ success: false, message: "Thiếu thông tin tải lên" });
+    }
+
+    const datFileName = `data_chunk_${Date.now()}_${Math.floor(Math.random() * 10000)}.dat`;
+    const formData = new FormData();
+    formData.append('chat_id', chatId);
+    formData.append('document', fs.createReadStream(file.path), datFileName);
+
+    const tgData = await requestTelegramWithRetry(
+      `https://api.telegram.org/bot${token}/sendDocument`,
+      'POST',
+      formData,
+      formData.getHeaders()
+    );
+
+    safeUnlink(file.path);
+
+    if (tgData && tgData.ok && tgData.result && tgData.result.document) {
+      return res.json({ success: true, file_id: tgData.result.document.file_id });
+    } else {
+      return res.status(400).json({ 
+        success: false, 
+        message: (tgData && tgData.description) ? tgData.description : "Lỗi tải lên Telegram" 
+      });
+    }
+  } catch (err) {
+    if (file) safeUnlink(file.path);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// 4. API Proxy Tải File từ Telegram
+app.get('/api/file-proxy', async (req, res, next) => {
+  try {
+    const { token, fileId, filename } = req.query;
+    if (!token || !fileId) return res.status(400).send("Thiếu tham số");
+
+    const infoData = await requestTelegramWithRetry(`https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`);
+
+    if (!infoData || !infoData.ok) return res.status(400).send("Không lấy được link file từ Telegram");
+
+    const fileUrl = `https://api.telegram.org/file/bot${token}/${infoData.result.file_path}`;
+    
+    const streamResponse = await axios({
+      method: 'GET',
+      url: fileUrl,
+      responseType: 'stream'
+    });
+
+    let contentType = 'application/octet-stream';
+    if (filename) {
+      const ext = path.extname(filename).toLowerCase();
+      const mimeTypes = {
+        '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif',
+        '.webp': 'image/webp', '.svg': 'image/svg+xml', '.mp4': 'video/mp4', '.webm': 'video/webm',
+        '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.pdf': 'application/pdf', '.txt': 'text/plain; charset=utf-8',
+        '.html': 'text/html; charset=utf-8', '.json': 'application/json; charset=utf-8'
+      };
+      if (mimeTypes[ext]) contentType = mimeTypes[ext];
+    }
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', filename ? `inline; filename="${encodeURIComponent(filename)}"` : 'inline');
+
+    pipeline(streamResponse.data, res, (err) => {
+      if (err && err.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
+        console.error('Lỗi đường ống truyền tải Stream Proxy:', err);
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 5. API Lưu CSDL lên Telegram
+app.post('/api/pin-db', async (req, res, next) => {
+  try {
+    const { token, chatId, mtb, dbData, msgId } = req.body;
+    if (!token || !chatId || !mtb) return res.status(400).json({ success: false, message: "Thiếu dữ liệu" });
+
+    const blob = Buffer.from(JSON.stringify(dbData || []));
+    const targetMsgId = msgId || pinnedDbMessageId;
+
+    if (targetMsgId) {
+      const formData = new FormData();
+      formData.append('chat_id', chatId);
+      formData.append('message_id', targetMsgId);
+      formData.append('media', JSON.stringify({
+        type: 'document',
+        media: `attach://database_${mtb}.json`
+      }));
+      formData.append(`database_${mtb}.json`, blob, `database_${mtb}.json`);
+
+      const editRes = await requestTelegramWithRetry(
+        `https://api.telegram.org/bot${token}/editMessageMedia`,
+        'POST',
+        formData,
+        formData.getHeaders()
+      );
+
+      if (editRes && editRes.ok) {
+        return res.json({ success: true, msgId: targetMsgId, updated: true });
+      }
+    }
+
+    const formData = new FormData();
+    formData.append('chat_id', chatId);
+    formData.append('document', blob, `database_${mtb}.json`);
+
+    const tgData = await requestTelegramWithRetry(
+      `https://api.telegram.org/bot${token}/sendDocument`,
+      'POST',
+      formData,
+      formData.getHeaders()
+    );
+
+    if (tgData && tgData.ok && tgData.result && tgData.result.message_id) {
+      pinnedDbMessageId = tgData.result.message_id;
+      return res.json({ success: true, msgId: pinnedDbMessageId, updated: false });
+    }
+
+    return res.status(400).json({ success: false, message: "Không thể lưu CSDL lên Telegram" });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 6. API Xuất Sao Lưu Cloud Sheet
+app.post('/api/save-backup', async (req, res, next) => {
+  try {
+    await axios.post(BACKUP_SCRIPT_URL, req.body, {
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+    });
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// MIDDLEWARE XỬ LÝ LỖI
+app.use((err, req, res, next) => {
+  console.error('[Unhandled Server Error]:', err.stack || <!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
@@ -67,8 +306,6 @@
 
   <!-- GIAO DIỆN CHÍNH -->
   <div class="max-w-5xl mx-auto space-y-6">
-    
-    <!-- Header -->
     <div class="bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-700 space-y-4">
       <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
@@ -89,7 +326,6 @@
         </div>
       </div>
 
-      <!-- Thanh Dung Lượng -->
       <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-700/60 space-y-2">
         <div class="flex justify-between text-xs font-semibold">
           <span class="text-slate-300">📊 Dung lượng đã sử dụng:</span>
@@ -101,7 +337,6 @@
       </div>
     </div>
 
-    <!-- Khung Upload & Tạo Thư Mục -->
     <div class="bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-700 space-y-4">
       <div class="flex flex-col md:flex-row gap-3">
         <button id="createFolderBtn" class="bg-amber-600 hover:bg-amber-500 text-white font-semibold px-4 py-2.5 rounded-xl transition shadow-lg shadow-amber-600/20 whitespace-nowrap flex items-center justify-center gap-2 text-sm">
@@ -111,7 +346,6 @@
         <input type="file" id="fileInput" multiple class="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 bg-slate-900 rounded-xl border border-slate-700 p-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
       </div>
 
-      <!-- KHUNG TIẾN TRÌNH TẢI FILE -->
       <div id="progressModal" class="hidden bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3 relative">
         <div class="flex justify-between items-center border-b border-slate-800 pb-2">
           <div class="text-xs font-bold text-indigo-400 flex items-center gap-2">
@@ -148,7 +382,6 @@
       </div>
     </div>
 
-    <!-- Bảng Danh Sách File / Folder -->
     <div class="bg-slate-800 rounded-2xl shadow-lg border border-slate-700 overflow-hidden space-y-2">
       <div class="bg-slate-900/60 px-6 py-3 border-b border-slate-700 flex items-center gap-2 text-sm text-slate-300 overflow-x-auto" id="breadcrumbBar"></div>
 
@@ -190,7 +423,7 @@
     </div>
   </div>
 
-  <!-- MODAL XEM FILE PREVIEW -->
+  <!-- MODAL XEM PREVIEW -->
   <div id="previewModal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-4 hidden">
     <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-4xl w-full p-6 space-y-4 shadow-2xl relative flex flex-col max-h-[90vh]">
       <div class="flex justify-between items-center border-b border-slate-700 pb-3">
@@ -233,15 +466,15 @@
     (() => {
       'use strict';
 
-      // CẤU HÌNH & HẰNG SỐ
+      // CẤU HÌNH API PROXY
       const CONFIG = {
         AUTH_API_URL: "/api/login",
-        BACKUP_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbw0EdS-qSOA2PpemKa2sdZ4QghxdikvXreCvuWwAfK_Q-nIGDg-9No0qLHfiLb3kyWFbQ/exec",
-        CHUNK_SIZE: 10 * 1024 * 1024, // 10MB
+        BACKUP_SCRIPT_URL: "/api/backup",
+        SAVE_BACKUP_URL: "/api/save-backup",
+        CHUNK_SIZE: 10 * 1024 * 1024,
         MAX_CACHE_SIZE: 5
       };
 
-      // QUẢN LÝ TRẠNG THÁI (STATE)
       const state = {
         mtb: localStorage.getItem('cur_mtb') || null,
         token: localStorage.getItem('cur_token') || null,
@@ -259,7 +492,6 @@
 
       const previewCache = new Map();
 
-      // BẢO MẬT & HELPER UTILS
       const escapeHtml = (text) => {
         if (!text) return '';
         return String(text)
@@ -278,7 +510,6 @@
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
       };
 
-      // KHỞI TẠO NGUYÊN THỂ (DOM READY)
       window.addEventListener('DOMContentLoaded', async () => {
         bindEvents();
         if (state.mtb && state.token && state.chatId) {
@@ -288,7 +519,6 @@
         }
       });
 
-      // GÁN SỰ KIỆN TẬP TRUNG (EVENT LISTENERS)
       function bindEvents() {
         document.getElementById('loginBtn').addEventListener('click', loginWithCloud);
         document.getElementById('closeWarningBtn').addEventListener('click', () => {
@@ -313,7 +543,6 @@
         document.getElementById('closeBackupFooterBtn').addEventListener('click', closeBackupModal);
       }
 
-      // XÁC THỰC
       async function loginWithCloud() {
         const mtb = document.getElementById('inputMTB').value.trim().toUpperCase();
         const mk = document.getElementById('inputMK').value.trim();
@@ -364,7 +593,6 @@
             statusDiv.innerText = "❌ " + (resData.message || "Sai Mã thiết bị hoặc Mật khẩu!");
           }
         } catch (err) {
-          console.error("Lỗi xác thực:", err);
           statusDiv.className = "text-xs text-center font-medium text-rose-400";
           statusDiv.innerText = "❌ Lỗi kết nối hệ thống!";
         } finally {
@@ -377,11 +605,10 @@
         location.reload();
       }
 
-      // ĐỒNG BỘ DỮ LIỆU CSDL & BACKUP
       async function autoFetchLatestBackupOnStart() {
         if (!state.mtb) return;
         try {
-          const res = await fetch(`${CONFIG.BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(state.mtb)}&t=${Date.now()}`);
+          const res = await fetch(`${CONFIG.BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(state.mtb)}`);
           const listData = await res.json();
 
           if (Array.isArray(listData) && listData.length > 0) {
@@ -438,9 +665,9 @@
         if (!state.mtb) return;
         const currentTimeStr = new Date().toLocaleString('vi-VN');
         try {
-          await fetch(CONFIG.BACKUP_SCRIPT_URL, {
+          await fetch(CONFIG.SAVE_BACKUP_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               mtb: state.mtb,
               time: currentTimeStr,
@@ -452,7 +679,6 @@
         }
       }
 
-      // QUẢN LÝ TIẾN TRÌNH UPLOAD
       async function startBatchUploadQueue() {
         const input = document.getElementById('fileInput');
         const files = Array.from(input.files);
@@ -470,7 +696,7 @@
 
         if (currentUsedBytes + totalNewBytes > maxAllowedBytes) {
           const freeBytes = Math.max(0, maxAllowedBytes - currentUsedBytes);
-          alert(`❌ Dung lượng khả dụng không đủ!\n\n• Đã dùng: ${formatBytes(currentUsedBytes)} / ${state.maxStorageGb} GB\n• Còn trống: ${formatBytes(freeBytes)}\n• Tổng tệp tải lên: ${formatBytes(totalNewBytes)}\n\nVui lòng xóa bớt tệp hoặc nâng hạn mức GB!`);
+          alert(`❌ Dung lượng khả dụng không đủ!\n\n• Đã dùng: ${formatBytes(currentUsedBytes)} / ${state.maxStorageGb} GB\n• Còn trống: ${formatBytes(freeBytes)}\n• Tổng tệp tải lên: ${formatBytes(totalNewBytes)}`);
           input.value = '';
           return;
         }
@@ -570,7 +796,7 @@
             if (!fileId) {
               retries--;
               if (retries > 0) {
-                statusText.innerText = `⚠️ Lỗi mạng / Tự động điều tiết tốc độ (Retry ${3 - retries}/3)...`;
+                statusText.innerText = `⚠️ Lỗi mạng / Thử lại (${3 - retries}/3)...`;
                 await new Promise(r => setTimeout(r, 2000));
               }
             }
@@ -677,7 +903,6 @@
         document.getElementById('progressModal').classList.add('hidden');
       }
 
-      // XỬ LÝ TẢI FILE VỀ & PREVIEW
       async function fetchFileBlobFromItem(item, onProgress) {
         const chunkIds = item.chunks || [item.id];
         let loadedCount = 0;
@@ -722,7 +947,7 @@
               const percent = Math.round((current / total) * 100);
               progressBar.style.width = percent + '%';
               percentText.innerText = percent + '%';
-              statusText.innerText = `📥 Tải song song các mảnh (${current}/${total}): ${item.name}`;
+              statusText.innerText = `📥 Tải song song mảnh (${current}/${total}): ${item.name}`;
             });
 
             if (previewCache.size >= CONFIG.MAX_CACHE_SIZE) {
@@ -745,7 +970,7 @@
           document.body.removeChild(link);
           URL.revokeObjectURL(blobUrl);
         } catch (err) {
-          alert("❌ Lỗi trong quá trình kết nối và ghép file: " + err.message);
+          alert("❌ Lỗi khi tải file: " + err.message);
         } finally {
           setTimeout(() => {
             progressModal.classList.add('hidden');
@@ -775,11 +1000,11 @@
 
         let fullBlob;
         if (previewCache.has(itemId)) {
-          content.innerHTML = `<div class="text-emerald-400 text-xs font-semibold">⚡ Đã tải từ bộ nhớ đệm nhanh!</div>`;
+          content.innerHTML = `<div class="text-emerald-400 text-xs font-semibold">⚡ Đã tải từ bộ nhớ đệm!</div>`;
           fullBlob = previewCache.get(itemId);
           await new Promise(r => setTimeout(r, 200));
         } else {
-          content.innerHTML = `<div class="text-amber-400 text-xs font-semibold animate-pulse">⏳ Đang tải song song các phần của file...</div>`;
+          content.innerHTML = `<div class="text-amber-400 text-xs font-semibold animate-pulse">⏳ Đang tải nội dung...</div>`;
           try {
             fullBlob = await fetchFileBlobFromItem(item);
 
@@ -789,7 +1014,7 @@
             }
             previewCache.set(itemId, fullBlob);
           } catch (err) {
-            content.innerHTML = `<div class="text-rose-400 text-xs font-semibold">❌ Không thể tải hoặc ghép nội dung xem trước!</div>`;
+            content.innerHTML = `<div class="text-rose-400 text-xs font-semibold">❌ Không thể tải file xem trước!</div>`;
             return;
           }
         }
@@ -833,7 +1058,6 @@
         }
       }
 
-      // THAO TÁC CƠ SỞ DỮ LIỆU & QUẢN LÝ TỆP/THƯ MỤC
       function createNewFolder() {
         const folderName = prompt("Nhập tên thư mục mới:");
         if (!folderName || !folderName.trim()) return;
@@ -1048,7 +1272,6 @@
         }
       }
 
-      // LỊCH SỬ SAO LƯU (BACKUP)
       async function openBackupHistoryModal() {
         const modal = document.getElementById('backupModal');
         const container = document.getElementById('backupListContainer');
@@ -1056,17 +1279,17 @@
         container.innerHTML = `<div class="text-center py-6 text-amber-400 text-xs font-semibold">⏳ Đang lấy danh sách bản sao lưu...</div>`;
 
         try {
-          const res = await fetch(`${CONFIG.BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(state.mtb)}&t=${Date.now()}`);
+          const res = await fetch(`${CONFIG.BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(state.mtb)}`);
           const listData = await res.json();
 
           if (!Array.isArray(listData) || listData.length === 0) {
-            container.innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">Tài khoản này chưa có bản sao lưu nào trên Google Sheet.</div>`;
+            container.innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">Tài khoản này chưa có bản sao lưu nào.</div>`;
             return;
           }
 
           const recentBackups = listData.slice().reverse();
 
-          container.innerHTML = recentBackups.map((item, index) => {
+          container.innerHTML = recentBackups.map((item) => {
             const fullJsonData = item.mainData || item.backupData;
             const encodedData = encodeURIComponent(typeof fullJsonData === 'string' ? fullJsonData : JSON.stringify(fullJsonData));
             
@@ -1132,4 +1355,12 @@
     })();
   </script>
 </body>
-</html>
+</html>err.message);
+  res.status(500).json({
+    success: false,
+    message: err.message || "Lỗi máy chủ nội bộ"
+  });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server Render đang chạy tại port ${PORT}`));
