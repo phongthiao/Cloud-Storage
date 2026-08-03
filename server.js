@@ -9,7 +9,7 @@ const { pipeline } = require('stream');
 
 const app = express();
 
-// Khởi tạo thư mục tạm để lưu file, tránh lưu trực tiếp trên RAM (memoryStorage) gây sập Render
+// Khởi tạo thư mục tạm để lưu file, tránh lưu trực tiếp trên RAM gây sập ứng dụng
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -26,10 +26,11 @@ app.use(express.json({ limit: '200mb' }));
 app.use(express.urlencoded({ limit: '200mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// URL API GIỮ NGUYÊN TUYỆT ĐỐI THEO YÊU CẦU
 const AUTH_API_URL = process.env.AUTH_API_URL || "https://script.google.com/macros/s/AKfycbw-RDeNdYzo7dMnmMRUV2jLkUSCmIN5Fk87suroVvo_bYjyyO05HEKXUcPyf_RLQ_A/exec";
 const BACKUP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyxpDyYr4IuQgWFTnQV6DDtrtWKDDjKiPYKjOSxgfL2PIDNCRNco5-v7OYux4wVFL-D/exec";
 
-// Hàm hỗ trợ Sleep chống Rate Limit
+// Hàm hỗ trợ Sleep chống Rate Limit Telegram
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // 1. API Đăng nhập
@@ -47,7 +48,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// 2. API Lấy Bản Sao Lưu từ Sheet
+// 2. API Lấy Bản Sao Lưu
 app.get('/api/backup', async (req, res) => {
   try {
     const { mtb } = req.query;
@@ -55,11 +56,11 @@ app.get('/api/backup', async (req, res) => {
     const data = await response.json();
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: "Lỗi tải bản sao lưu từ Sheet" });
+    res.status(500).json({ error: "Lỗi tải bản sao lưu" });
   }
 });
 
-// 3. API Lưu Bản Sao Lưu vào Sheet
+// 3. API Lưu Bản Sao Lưu
 app.post('/api/save-backup', async (req, res) => {
   try {
     const response = await fetch(BACKUP_SCRIPT_URL, {
@@ -74,7 +75,7 @@ app.post('/api/save-backup', async (req, res) => {
   }
 });
 
-// 4. API Upload Chunk (Chống Tràn RAM + Xử Lý Lỗi 429 Retry-After)
+// 4. API Upload Chunk (Chống Tràn RAM + Xử Lý Lỗi 429 Retry-After Telegram)
 app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   const filePath = req.file ? req.file.path : null;
   try {
@@ -99,18 +100,16 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
 
       tgData = await tgRes.json();
 
-      // Nếu gặp lỗi Rate Limit 429
       if (tgRes.status === 429 || (tgData && tgData.error_code === 429)) {
         const retryAfter = (tgData.parameters && tgData.parameters.retry_after) ? tgData.parameters.retry_after : 3;
         console.warn(`[Rate Limit 429] Telegram yêu cầu đợi ${retryAfter} giây...`);
         await sleep((retryAfter + 1) * 1000);
         attempts++;
       } else {
-        break; // Tải lên thành công hoặc lỗi khác
+        break;
       }
     }
 
-    // Xóa file tạm sau khi gửi xong
     if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
     if (tgData && tgData.ok && tgData.result.document) {
@@ -125,7 +124,7 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   }
 });
 
-// 5. API Proxy Tải File Stream
+// 5. API Proxy Tải File Stream (Hỗ trợ HTTP Range Requests cho Tốc độ & Media Streaming)
 app.get('/api/file-proxy', async (req, res) => {
   try {
     const { token, fileId, filename } = req.query;
@@ -137,7 +136,14 @@ app.get('/api/file-proxy', async (req, res) => {
     if (!infoData.ok) return res.status(400).send("Lỗi lấy thông tin file từ Telegram");
 
     const fileUrl = `https://api.telegram.org/file/bot${token}/${infoData.result.file_path}`;
-    const fileStream = await fetch(fileUrl);
+
+    // Forward các HTTP Headers hỗ trợ Range Requests để tăng tốc và tua video/audio
+    const fetchHeaders = {};
+    if (req.headers.range) {
+      fetchHeaders['Range'] = req.headers.range;
+    }
+
+    const fileStream = await fetch(fileUrl, { headers: fetchHeaders });
 
     let contentType = 'application/octet-stream';
     if (filename) {
@@ -145,13 +151,24 @@ app.get('/api/file-proxy', async (req, res) => {
       const mimeTypes = {
         '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif',
         '.webp': 'image/webp', '.mp4': 'video/mp4', '.webm': 'video/webm',
-        '.mp3': 'audio/mpeg', '.pdf': 'application/pdf', '.txt': 'text/plain; charset=utf-8',
-        '.html': 'text/html; charset=utf-8', '.json': 'application/json; charset=utf-8'
+        '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.pdf': 'application/pdf', 
+        '.txt': 'text/plain; charset=utf-8', '.html': 'text/html; charset=utf-8', 
+        '.json': 'application/json; charset=utf-8'
       };
       if (mimeTypes[ext]) contentType = mimeTypes[ext];
     }
 
+    res.status(fileStream.status);
     res.setHeader('Content-Type', contentType);
+    res.setHeader('Accept-Ranges', 'bytes');
+
+    if (fileStream.headers.get('content-range')) {
+      res.setHeader('Content-Range', fileStream.headers.get('content-range'));
+    }
+    if (fileStream.headers.get('content-length')) {
+      res.setHeader('Content-Length', fileStream.headers.get('content-length'));
+    }
+
     res.setHeader('Content-Disposition', filename ? `inline; filename="${encodeURIComponent(filename)}"` : 'inline');
 
     pipeline(fileStream.body, res, (err) => {
