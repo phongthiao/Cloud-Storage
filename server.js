@@ -9,7 +9,7 @@ const { pipeline } = require('stream');
 
 const app = express();
 
-// 1. CẢI TIẾN BACKEND: Dùng diskStorage lưu tạm vào đĩa /tmp/ thay vì RAM (MemoryStorage)
+// 1. Dùng diskStorage lưu tạm vào đĩa /tmp/ thay vì RAM (MemoryStorage)
 const upload = multer({ dest: '/tmp/' });
 
 app.use(cors());
@@ -18,7 +18,9 @@ app.use(express.urlencoded({ limit: '200mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const AUTH_API_URL = process.env.AUTH_API_URL || "https://script.google.com/macros/s/AKfycbw-RDeNdYzo7dMnmMRUV2jLkUSCmIN5Fk87suroVvo_bYjyyO05HEKXUcPyf_RLQ_A/exec";
-const BACKUP_SCRIPT_URL = process.env.BACKUP_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbyMkD7y_bCC4l27JZgn5bzmWpch_ZTH208YzapDTw6nMIC4CXD9lUJJ2ccq3wqcsmhLeA/exec";
+
+// 🛑 ĐÃ CẬP NHẬT ĐƯỜNG DẪN APPS SCRIPT DỰ PHÒNG GOOGLE SHEET MỚI
+const BACKUP_SCRIPT_URL = process.env.BACKUP_SCRIPT_URL || "https://script.google.com/macros/s/AKfycby1cykTfz4jerGHDsm8Udjco2EfZMbDYTQ8PTDjXXjyQmDRAejx1N5vA-jKpnmLupqlBw/exec";
 
 // Lưu giữ ID của tin nhắn CSDL cố định để thực hiện sửa tin nhắn (Edit Message)
 let pinnedDbMessageId = null;
@@ -56,7 +58,7 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// 2. API Lấy Bản Sao Lưu
+// 2. API Lấy Bản Sao Lưu từ Google Sheet
 app.get('/api/backup', async (req, res) => {
   try {
     const { mtb } = req.query;
@@ -82,7 +84,6 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
     const datFileName = `data_chunk_${Date.now()}_${Math.floor(Math.random() * 10000)}.dat`;
     const formData = new FormData();
     formData.append('chat_id', chatId);
-    // Đẩy stream từ file tạm trên đĩa vào FormData
     formData.append('document', fs.createReadStream(file.path), datFileName);
 
     const tgData = await fetchTelegramWithRetry(`https://api.telegram.org/bot${token}/sendDocument`, {
@@ -90,7 +91,6 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
       body: formData
     });
 
-    // CẢI TIẾN BACKEND: Xóa ngay lập tức file tạm trên đĩa sau khi gửi thành công
     if (file && file.path && fs.existsSync(file.path)) {
       fs.unlinkSync(file.path);
     }
@@ -101,7 +101,6 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
       res.status(400).json({ success: false, message: tgData.description || "Lỗi tải lên Telegram" });
     }
   } catch (err) {
-    // Dọn dẹp tệp tạm khi gặp lỗi
     if (req.file && req.file.path && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
@@ -174,7 +173,6 @@ app.post('/api/pin-db', async (req, res) => {
       }
     }
 
-    // Nếu gửi lần đầu tiên
     const formData = new FormData();
     formData.append('chat_id', chatId);
     formData.append('document', blob, `database_${mtb}.json`);
@@ -195,7 +193,7 @@ app.post('/api/pin-db', async (req, res) => {
   }
 });
 
-// 6. API Xuất Sao Lưu Cloud Drive
+// 6. API Xuất Sao Lưu Cloud Sheet
 app.post('/api/save-backup', async (req, res) => {
   try {
     await fetch(BACKUP_SCRIPT_URL, {
