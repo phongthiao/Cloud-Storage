@@ -15,10 +15,10 @@ app.use(express.urlencoded({ limit: '200mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const AUTH_API_URL = process.env.AUTH_API_URL || "https://script.google.com/macros/s/AKfycbw-RDeNdYzo7dMnmMRUV2jLkUSCmIN5Fk87suroVvo_bYjyyO05HEKXUcPyf_RLQ_A/exec";
-// Điền Web App URL mới từ Google Apps Script ở bước 1 vào đây
-const BACKUP_SCRIPT_URL = process.env.BACKUP_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbyxpDyYr4IuQgWFTnQV6DDtrtWKDDjKiPYKjOSxgfL2PIDNCRNco5-v7OYux4wVFL-D/exec";
+// URL Web App Google Sheet Mới Của Bạn:
+const BACKUP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyxpDyYr4IuQgWFTnQV6DDtrtWKDDjKiPYKjOSxgfL2PIDNCRNco5-v7OYux4wVFL-D/exec";
 
-// 1. API Đăng nhập
+// 1. API Đăng Nhập
 app.post('/api/login', async (req, res) => {
   try {
     const response = await fetch(AUTH_API_URL, {
@@ -29,11 +29,11 @@ app.post('/api/login', async (req, res) => {
     const data = await response.json();
     res.json(data);
   } catch (err) {
-    res.status(500).json({ success: false, message: "Lỗi xác thực từ Server" });
+    res.status(500).json({ success: false, message: "Lỗi hệ thống xác thực" });
   }
 });
 
-// 2. API Lấy Danh Sách Bản Sao Lưu Từ Sheet
+// 2. API Lấy Danh Sách Bản Sao Lưu Từ Google Sheet
 app.get('/api/backup', async (req, res) => {
   try {
     const { mtb } = req.query;
@@ -41,18 +41,33 @@ app.get('/api/backup', async (req, res) => {
     const data = await response.json();
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: "Lỗi lấy bản sao lưu" });
+    res.status(500).json({ error: "Lỗi tải bản sao lưu từ Sheet" });
   }
 });
 
-// 3. API Upload Chunk Tệp Lên Telegram Bot
+// 3. API Lưu Bản Sao Lưu Vào Google Sheet
+app.post('/api/save-backup', async (req, res) => {
+  try {
+    const response = await fetch(BACKUP_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(req.body)
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 4. API Upload Chunk Tệp Lên Telegram Bot
 app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   try {
     const { token, chatId } = req.body;
     const file = req.file;
 
     if (!token || !chatId || !file) {
-      return res.status(400).json({ success: false, message: "Thiếu thông tin tải lên" });
+      return res.status(400).json({ success: false, message: "Thiếu dữ liệu upload" });
     }
 
     const datFileName = `data_chunk_${Date.now()}_${Math.floor(Math.random() * 10000)}.dat`;
@@ -69,23 +84,23 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
     if (tgData.ok && tgData.result.document) {
       res.json({ success: true, file_id: tgData.result.document.file_id });
     } else {
-      res.status(400).json({ success: false, message: tgData.description || "Lỗi tải lên Telegram" });
+      res.status(400).json({ success: false, message: tgData.description || "Lỗi Telegram" });
     }
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// 4. API Proxy Đọc File
+// 5. API Proxy Tải File từ Telegram
 app.get('/api/file-proxy', async (req, res) => {
   try {
     const { token, fileId, filename } = req.query;
-    if (!token || !fileId) return res.status(400).send("Thiếu tham số");
+    if (!token || !fileId) return res.status(400).send("Thiếu thông số");
 
     const infoRes = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`);
     const infoData = await infoRes.json();
 
-    if (!infoData.ok) return res.status(400).send("Không lấy được link file");
+    if (!infoData.ok) return res.status(400).send("Lỗi lấy thông tin file");
 
     const fileUrl = `https://api.telegram.org/file/bot${token}/${infoData.result.file_path}`;
     const fileStream = await fetch(fileUrl);
@@ -95,8 +110,8 @@ app.get('/api/file-proxy', async (req, res) => {
       const ext = path.extname(filename).toLowerCase();
       const mimeTypes = {
         '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif',
-        '.webp': 'image/webp', '.svg': 'image/svg+xml', '.mp4': 'video/mp4', '.webm': 'video/webm',
-        '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.pdf': 'application/pdf', '.txt': 'text/plain; charset=utf-8',
+        '.webp': 'image/webp', '.mp4': 'video/mp4', '.webm': 'video/webm',
+        '.mp3': 'audio/mpeg', '.pdf': 'application/pdf', '.txt': 'text/plain; charset=utf-8',
         '.html': 'text/html; charset=utf-8', '.json': 'application/json; charset=utf-8'
       };
       if (mimeTypes[ext]) contentType = mimeTypes[ext];
@@ -107,15 +122,15 @@ app.get('/api/file-proxy', async (req, res) => {
 
     pipeline(fileStream.body, res, (err) => {
       if (err && err.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
-        console.error('Lỗi truyền tải Stream:', err);
+        console.error('Stream Error:', err);
       }
     });
   } catch (err) {
-    res.status(500).send("Lỗi tải luồng dữ liệu file");
+    res.status(500).send("Lỗi Stream dữ liệu");
   }
 });
 
-// 5. API Ghim CSDL Lên Telegram
+// 6. API Ghim CSDL Lên Telegram
 app.post('/api/pin-db', async (req, res) => {
   try {
     const { token, chatId, mtb, dbData } = req.body;
@@ -148,20 +163,5 @@ app.post('/api/pin-db', async (req, res) => {
   }
 });
 
-// 6. API Lưu Sao Lưu Vào Google Sheet
-app.post('/api/save-backup', async (req, res) => {
-  try {
-    const response = await fetch(BACKUP_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(req.body)
-    });
-    const data = await response.json();
-    res.json(data);
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server đang chạy tại port ${PORT}`));
+app.listen(PORT, () => console.log(`Server chạy tại cổng ${PORT}`));
