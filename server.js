@@ -1,150 +1,94 @@
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
-const axios = require('axios');
+const fetch = require('node-fetch');
 const FormData = require('form-data');
 const path = require('path');
-const fs = require('fs');
 const { pipeline } = require('stream');
 
 const app = express();
-
-// Cấu hình Multer lưu đĩa tạm thời
-const upload = multer({ dest: '/tmp/' });
+const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(cors());
 app.use(express.json({ limit: '200mb' }));
 app.use(express.urlencoded({ limit: '200mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// HẰNG SỐ & BIẾN TOÀN CỤC
 const AUTH_API_URL = process.env.AUTH_API_URL || "https://script.google.com/macros/s/AKfycbw-RDeNdYzo7dMnmMRUV2jLkUSCmIN5Fk87suroVvo_bYjyyO05HEKXUcPyf_RLQ_A/exec";
-// Đã cập nhật URL Google Apps Script mới tại đây:
-const BACKUP_SCRIPT_URL = process.env.BACKUP_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbzF6WA_qNfFRf-ykoJFzq4Tj6USpW7Z2Sx-phdPf3u9WvBomyAYGcTyzNNHeazNmvY1Hg/exec";
+// Điền Web App URL mới từ Google Apps Script ở bước 1 vào đây
+const BACKUP_SCRIPT_URL = process.env.BACKUP_SCRIPT_URL || "https://script.google.com/macros/s/AKfycbyxpDyYr4IuQgWFTnQV6DDtrtWKDDjKiPYKjOSxgfL2PIDNCRNco5-v7OYux4wVFL-D/exec";
 
-let pinnedDbMessageId = null;
-
-// Hàm An Toàn Xóa File Tạm
-function safeUnlink(filePath) {
-  if (filePath && fs.existsSync(filePath)) {
-    fs.unlink(filePath, (err) => {
-      if (err) console.error(`[FS Unlink Error] Không thể xóa file tạm ${filePath}:`, err);
-    });
-  }
-}
-
-// Hàm Bắt Lỗi 429 Rate Limit & Tự động Retry với Axios
-async function requestTelegramWithRetry(url, method = 'GET', data = null, headers = {}, maxRetries = 5) {
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const response = await axios({
-        url,
-        method,
-        data,
-        headers,
-        validateStatus: () => true
-      });
-
-      const resData = response.data;
-
-      if (response.status === 429 || (resData && !resData.ok && resData.error_code === 429)) {
-        const retryAfter = (resData.parameters && resData.parameters.retry_after) ? resData.parameters.retry_after : 3;
-        console.warn(`[Telegram Rate Limit 429] Tạm dừng ${retryAfter}s trước khi gửi lại...`);
-        await new Promise(resolve => setTimeout(resolve, (retryAfter + 1) * 1000));
-        continue;
-      }
-
-      return resData;
-    } catch (err) {
-      if (attempt === maxRetries - 1) throw err;
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-  }
-  throw new Error("Vượt quá số lần thử lại Telegram API do Rate Limit.");
-}
-
-// 1. API Xác thực Đăng Nhập
-app.post('/api/login', async (req, res, next) => {
+// 1. API Đăng nhập
+app.post('/api/login', async (req, res) => {
   try {
-    const response = await axios.post(AUTH_API_URL, req.body, {
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+    const response = await fetch(AUTH_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(req.body)
     });
-    res.json(response.data);
+    const data = await response.json();
+    res.json(data);
   } catch (err) {
-    next(err);
+    res.status(500).json({ success: false, message: "Lỗi xác thực từ Server" });
   }
 });
 
-// 2. API Lấy Bản Sao Lưu từ Google Sheet
-app.get('/api/backup', async (req, res, next) => {
+// 2. API Lấy Danh Sách Bản Sao Lưu Từ Sheet
+app.get('/api/backup', async (req, res) => {
   try {
     const { mtb } = req.query;
-    if (!mtb) return res.status(400).json({ error: "Thiếu mã thiết bị (mtb)" });
-
-    const response = await axios.get(`${BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(mtb)}&t=${Date.now()}`);
-    res.json(response.data);
+    const response = await fetch(`${BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(mtb)}&t=${Date.now()}`);
+    const data = await response.json();
+    res.json(data);
   } catch (err) {
-    next(err);
+    res.status(500).json({ error: "Lỗi lấy bản sao lưu" });
   }
 });
 
-// 3. API Upload Chunk
+// 3. API Upload Chunk Tệp Lên Telegram Bot
 app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
-  const file = req.file;
-  
   try {
     const { token, chatId } = req.body;
+    const file = req.file;
 
     if (!token || !chatId || !file) {
-      if (file) safeUnlink(file.path);
       return res.status(400).json({ success: false, message: "Thiếu thông tin tải lên" });
     }
 
     const datFileName = `data_chunk_${Date.now()}_${Math.floor(Math.random() * 10000)}.dat`;
     const formData = new FormData();
     formData.append('chat_id', chatId);
-    formData.append('document', fs.createReadStream(file.path), datFileName);
+    formData.append('document', file.buffer, datFileName);
 
-    const tgData = await requestTelegramWithRetry(
-      `https://api.telegram.org/bot${token}/sendDocument`,
-      'POST',
-      formData,
-      formData.getHeaders()
-    );
+    const tgRes = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+      method: 'POST',
+      body: formData
+    });
 
-    safeUnlink(file.path);
-
-    if (tgData && tgData.ok && tgData.result && tgData.result.document) {
-      return res.json({ success: true, file_id: tgData.result.document.file_id });
+    const tgData = await tgRes.json();
+    if (tgData.ok && tgData.result.document) {
+      res.json({ success: true, file_id: tgData.result.document.file_id });
     } else {
-      return res.status(400).json({ 
-        success: false, 
-        message: (tgData && tgData.description) ? tgData.description : "Lỗi tải lên Telegram" 
-      });
+      res.status(400).json({ success: false, message: tgData.description || "Lỗi tải lên Telegram" });
     }
   } catch (err) {
-    if (file) safeUnlink(file.path);
-    return res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// 4. API Proxy Tải File từ Telegram
-app.get('/api/file-proxy', async (req, res, next) => {
+// 4. API Proxy Đọc File
+app.get('/api/file-proxy', async (req, res) => {
   try {
     const { token, fileId, filename } = req.query;
     if (!token || !fileId) return res.status(400).send("Thiếu tham số");
 
-    const infoData = await requestTelegramWithRetry(`https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`);
+    const infoRes = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`);
+    const infoData = await infoRes.json();
 
-    if (!infoData || !infoData.ok) return res.status(400).send("Không lấy được link file từ Telegram");
+    if (!infoData.ok) return res.status(400).send("Không lấy được link file");
 
     const fileUrl = `https://api.telegram.org/file/bot${token}/${infoData.result.file_path}`;
-    
-    const streamResponse = await axios({
-      method: 'GET',
-      url: fileUrl,
-      responseType: 'stream'
-    });
+    const fileStream = await fetch(fileUrl);
 
     let contentType = 'application/octet-stream';
     if (filename) {
@@ -161,89 +105,63 @@ app.get('/api/file-proxy', async (req, res, next) => {
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', filename ? `inline; filename="${encodeURIComponent(filename)}"` : 'inline');
 
-    pipeline(streamResponse.data, res, (err) => {
+    pipeline(fileStream.body, res, (err) => {
       if (err && err.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
-        console.error('Lỗi đường ống truyền tải Stream Proxy:', err);
+        console.error('Lỗi truyền tải Stream:', err);
       }
     });
   } catch (err) {
-    next(err);
+    res.status(500).send("Lỗi tải luồng dữ liệu file");
   }
 });
 
-// 5. API Lưu CSDL lên Telegram
-app.post('/api/pin-db', async (req, res, next) => {
+// 5. API Ghim CSDL Lên Telegram
+app.post('/api/pin-db', async (req, res) => {
   try {
-    const { token, chatId, mtb, dbData, msgId } = req.body;
-    if (!token || !chatId || !mtb) return res.status(400).json({ success: false, message: "Thiếu dữ liệu" });
-
-    const blob = Buffer.from(JSON.stringify(dbData || []));
-    const targetMsgId = msgId || pinnedDbMessageId;
-
-    if (targetMsgId) {
-      const formData = new FormData();
-      formData.append('chat_id', chatId);
-      formData.append('message_id', targetMsgId);
-      formData.append('media', JSON.stringify({
-        type: 'document',
-        media: `attach://database_${mtb}.json`
-      }));
-      formData.append(`database_${mtb}.json`, blob, `database_${mtb}.json`);
-
-      const editRes = await requestTelegramWithRetry(
-        `https://api.telegram.org/bot${token}/editMessageMedia`,
-        'POST',
-        formData,
-        formData.getHeaders()
-      );
-
-      if (editRes && editRes.ok) {
-        return res.json({ success: true, msgId: targetMsgId, updated: true });
-      }
-    }
+    const { token, chatId, mtb, dbData } = req.body;
+    const blob = Buffer.from(JSON.stringify(dbData));
 
     const formData = new FormData();
     formData.append('chat_id', chatId);
     formData.append('document', blob, `database_${mtb}.json`);
 
-    const tgData = await requestTelegramWithRetry(
-      `https://api.telegram.org/bot${token}/sendDocument`,
-      'POST',
-      formData,
-      formData.getHeaders()
-    );
-
-    if (tgData && tgData.ok && tgData.result && tgData.result.message_id) {
-      pinnedDbMessageId = tgData.result.message_id;
-      return res.json({ success: true, msgId: pinnedDbMessageId, updated: false });
-    }
-
-    return res.status(400).json({ success: false, message: "Không thể lưu CSDL lên Telegram" });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// 6. API Xuất Sao Lưu Cloud Sheet
-app.post('/api/save-backup', async (req, res, next) => {
-  try {
-    await axios.post(BACKUP_SCRIPT_URL, req.body, {
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+    const tgRes = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+      method: 'POST',
+      body: formData
     });
+
+    const tgData = await tgRes.json();
+    if (tgData.ok && tgData.result.message_id) {
+      await fetch(`https://api.telegram.org/bot${token}/pinChatMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          message_id: tgData.result.message_id,
+          disable_notification: true
+        })
+      });
+    }
     res.json({ success: true });
   } catch (err) {
-    next(err);
+    res.status(500).json({ success: false });
   }
 });
 
-// MIDDLEWARE XỬ LÝ LỖI
-app.use((err, req, res, next) => {
-  console.error('[Unhandled Server Error]:', err.stack || err.message);
-  res.status(500).json({
-    success: false,
-    message: err.message || "Lỗi máy chủ nội bộ"
-  });
+// 6. API Lưu Sao Lưu Vào Google Sheet
+app.post('/api/save-backup', async (req, res) => {
+  try {
+    const response = await fetch(BACKUP_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(req.body)
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server Render đang chạy tại port ${PORT}`));
+app.listen(PORT, () => console.log(`Server đang chạy tại port ${PORT}`));
