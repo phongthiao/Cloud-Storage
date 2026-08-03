@@ -13,7 +13,6 @@ const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_cloud_storage_key_202
 const AUTH_API_URL = process.env.AUTH_API_URL || "https://script.google.com/macros/s/AKfycbw-RDeNdYzo7dMnmMRUV2jLkUSCmIN5Fk87suroVvo_bYjyyO05HEKXUcPyf_RLQ_A/exec";
 const BACKUP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyxpDyYr4IuQgWFTnQV6DDtrtWKDDjKiPYKjOSxgfL2PIDNCRNco5-v7OYux4wVFL-D/exec";
 
-// Lưu trữ Chunk trên RAM tạm thời bằng Buffer (không ghi đĩa server)
 const upload = multer({ 
   storage: multer.memoryStorage(), 
   limits: { fileSize: 200 * 1024 * 1024 } 
@@ -26,25 +25,19 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Middleware xác thực JWT
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) {
-    return res.status(401).json({ success: false, message: "Thiếu Session Token hoặc chưa đăng nhập" });
-  }
+  if (!token) return res.status(401).json({ success: false, message: "Thiếu Session Token" });
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ success: false, message: "Session đã hết hạn hoặc không hợp lệ" });
-    }
+    if (err) return res.status(403).json({ success: false, message: "Session không hợp lệ" });
     req.user = user;
     next();
   });
 };
 
-// API Đăng nhập
 app.post('/api/login', async (req, res) => {
   try {
     const response = await fetch(AUTH_API_URL, {
@@ -75,7 +68,6 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Các API Backup
 app.get('/api/backup', async (req, res) => {
   try {
     const { mtb } = req.query;
@@ -101,14 +93,10 @@ app.post('/api/save-backup', async (req, res) => {
   }
 });
 
-// API Upload Chunk lên Telegram với chống Rate Limit
 app.post('/api/upload-chunk', authenticateToken, upload.single('document'), async (req, res) => {
   try {
     const { token, chatId } = req.user;
-
-    if (!token || !chatId || !req.file) {
-      return res.status(400).json({ success: false, message: "Thiếu dữ liệu upload" });
-    }
+    if (!token || !chatId || !req.file) return res.status(400).json({ success: false, message: "Thiếu dữ liệu" });
 
     let attempts = 0;
     let tgData = null;
@@ -126,7 +114,7 @@ app.post('/api/upload-chunk', authenticateToken, upload.single('document'), asyn
       tgData = await tgRes.json();
 
       if (tgRes.status === 429 || (tgData && tgData.error_code === 429)) {
-        const retryAfter = (tgData.parameters && tgData.parameters.retry_after) ? tgData.parameters.retry_after : 3;
+        const retryAfter = (tgData.parameters && tgData.parameters.retry_after) ? tgData.parameters.retry_after : 2;
         await sleep((retryAfter + 1) * 1000);
         attempts++;
       } else {
@@ -139,13 +127,12 @@ app.post('/api/upload-chunk', authenticateToken, upload.single('document'), asyn
     } else {
       res.status(400).json({ success: false, message: tgData ? tgData.description : "Lỗi Telegram API" });
     }
-
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// Proxy truyền tải dữ liệu Chunk trực tiếp
+// Proxy truyền dữ liệu tối ưu băng thông và Stream trực tiếp
 app.get('/api/file-proxy', authenticateToken, async (req, res) => {
   try {
     const { fileId, filename } = req.query;
@@ -153,23 +140,19 @@ app.get('/api/file-proxy', authenticateToken, async (req, res) => {
 
     if (!token || !fileId) return res.status(400).send("Thiếu thông số");
 
-    let infoRes = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`);
-    let infoData = await infoRes.json();
+    const infoRes = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`);
+    const infoData = await infoRes.json();
 
-    if (!infoData.ok) return res.status(400).send("Lỗi lấy thông tin file từ Telegram");
+    if (!infoData.ok) return res.status(400).send("Không lấy được File ID từ Telegram");
 
     const fileUrl = `https://api.telegram.org/file/bot${token}/${infoData.result.file_path}`;
 
     const fetchHeaders = {};
-    if (req.headers.range) {
-      fetchHeaders['Range'] = req.headers.range;
-    }
+    if (req.headers.range) fetchHeaders['Range'] = req.headers.range;
 
     const fileStream = await fetch(fileUrl, { headers: fetchHeaders });
 
-    if (!fileStream.ok) {
-      return res.status(fileStream.status).send("Không thể kết nối Telegram CDN");
-    }
+    if (!fileStream.ok) return res.status(fileStream.status).send("Lỗi Telegram CDN");
 
     let contentType = 'application/octet-stream';
     if (filename) {
@@ -186,6 +169,7 @@ app.get('/api/file-proxy', authenticateToken, async (req, res) => {
     res.status(fileStream.status);
     res.setHeader('Content-Type', contentType);
     res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache tối ưu tốc độ
 
     if (fileStream.headers.get('content-range')) {
       res.setHeader('Content-Range', fileStream.headers.get('content-range'));
@@ -196,11 +180,19 @@ app.get('/api/file-proxy', authenticateToken, async (req, res) => {
 
     res.setHeader('Content-Disposition', filename ? `inline; filename="${encodeURIComponent(filename)}"` : 'inline');
 
-    pipeline(fileStream.body, res, (err) => {
+    // Pipe luồng dữ liệu trực tiếp ngắt kết nối khi Client Abort
+    const streamPipeline = pipeline(fileStream.body, res, (err) => {
       if (err && err.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
-        console.error('Stream Proxy Error:', err);
+        console.error('Stream Error:', err.message);
       }
     });
+
+    req.on('close', () => {
+      if (fileStream.body && typeof fileStream.body.destroy === 'function') {
+        fileStream.body.destroy();
+      }
+    });
+
   } catch (err) {
     res.status(500).send("Lỗi Stream dữ liệu");
   }
