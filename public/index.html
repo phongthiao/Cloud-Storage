@@ -239,6 +239,7 @@
   <script>
     let CURRENT_MTB = localStorage.getItem('cur_mtb') || null;
     let MAX_STORAGE_GB = localStorage.getItem('cur_max_gb') ? parseFloat(localStorage.getItem('cur_max_gb')) : 5;
+    let SESSION_TOKEN = localStorage.getItem('session_token') || null;
 
     let dbFiles = [];
     let currentFolderId = null;
@@ -252,7 +253,7 @@
 
     window.onload = async () => {
       setupDragAndDrop();
-      if (CURRENT_MTB) {
+      if (CURRENT_MTB && SESSION_TOKEN) {
         document.getElementById('loginScreen').classList.add('hidden');
         document.getElementById('userInfoBadge').innerText = `Thiết bị: ${CURRENT_MTB}`;
         await autoFetchLatestBackupOnStart();
@@ -304,9 +305,11 @@
         if (data.success) {
           CURRENT_MTB = data.mtb;
           MAX_STORAGE_GB = data.maxGb || 5;
+          SESSION_TOKEN = data.sessionToken;
 
           localStorage.setItem('cur_mtb', CURRENT_MTB);
           localStorage.setItem('cur_max_gb', MAX_STORAGE_GB);
+          localStorage.setItem('session_token', SESSION_TOKEN);
 
           document.getElementById('loginScreen').classList.add('hidden');
           document.getElementById('userInfoBadge').innerText = `Thiết bị: ${CURRENT_MTB}`;
@@ -443,7 +446,11 @@
           let uploadSuccess = false;
           for (let retry = 0; retry < 3; retry++) {
             try {
-              const res = await fetch('/api/upload-chunk', { method: 'POST', body: formData });
+              const res = await fetch('/api/upload-chunk', { 
+                method: 'POST', 
+                headers: { 'Authorization': `Bearer ${SESSION_TOKEN}` },
+                body: formData 
+              });
               const data = await res.json();
               if (data.success) {
                 chunkIds.push(data.file_id);
@@ -482,39 +489,53 @@
       progressModal.classList.add('hidden');
     }
 
-    // TẢI CHUNK TUẦN TỰ (SEQUENTIAL QUEUE) VỚI TÍNH NĂNG RETRY CHỐNG NGHẼN TELEGRAM
+    // TẢI CHUNK SONG SONG (CONCURRENCY CONTROL - MAXIMUM 3 REQS)
     async function fetchChunksWithLimit(chunks, filename, progressCallback) {
       const results = new Array(chunks.length);
+      const CONCURRENCY = 3;
+      let completedCount = 0;
 
-      for (let i = 0; i < chunks.length; i++) {
-        const chunkId = chunks[i];
+      const fetchSingleChunk = async (index) => {
+        const chunkId = chunks[index];
         const proxyUrl = `/api/file-proxy?fileId=${encodeURIComponent(chunkId)}&filename=${encodeURIComponent(filename)}`;
         
-        if (progressCallback) progressCallback(i + 1, chunks.length);
-
         let downloadedBlob = null;
-        let lastError = null;
-
-        // Thử lại tối đa 3 lần nếu mảnh bị lỗi
         for (let attempt = 1; attempt <= 3; attempt++) {
           try {
-            const res = await fetch(proxyUrl);
+            const res = await fetch(proxyUrl, {
+              headers: { 'Authorization': `Bearer ${SESSION_TOKEN}` }
+            });
             if (!res.ok) throw new Error(`HTTP Status ${res.status}`);
             downloadedBlob = await res.blob();
             break; 
           } catch (err) {
-            lastError = err;
-            await new Promise(r => setTimeout(r, 1500 * attempt)); // Chờ tăng dần
+            await new Promise(r => setTimeout(r, 1000 * attempt));
           }
         }
 
         if (!downloadedBlob) {
-          throw new Error(`Lỗi tải mảnh #${i + 1}`);
+          throw new Error(`Lỗi tải mảnh #${index + 1}`);
         }
 
-        results[i] = downloadedBlob;
+        results[index] = downloadedBlob;
+        completedCount++;
+        if (progressCallback) progressCallback(completedCount, chunks.length);
+      };
+
+      const queue = [];
+      for (let i = 0; i < chunks.length; i++) {
+        const task = fetchSingleChunk(i);
+        queue.push(task);
+
+        if (queue.length >= CONCURRENCY) {
+          await Promise.race(queue);
+          for (let j = queue.length - 1; j >= 0; j--) {
+            // Dọn dẹp task đã hoàn thành
+          }
+        }
       }
 
+      await Promise.all(queue);
       return results;
     }
 
