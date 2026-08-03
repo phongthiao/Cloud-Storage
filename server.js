@@ -13,7 +13,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_cloud_storage_key_202
 const AUTH_API_URL = process.env.AUTH_API_URL || "https://script.google.com/macros/s/AKfycbw-RDeNdYzo7dMnmMRUV2jLkUSCmIN5Fk87suroVvo_bYjyyO05HEKXUcPyf_RLQ_A/exec";
 const BACKUP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyxpDyYr4IuQgWFTnQV6DDtrtWKDDjKiPYKjOSxgfL2PIDNCRNco5-v7OYux4wVFL-D/exec";
 
-// Lưu trữ Chunk trực tiếp trên RAM (tránh rò rỉ ổ cứng Server)
+// Lưu trữ Chunk trên RAM tạm thời bằng Buffer (không ghi đĩa server)
 const upload = multer({ 
   storage: multer.memoryStorage(), 
   limits: { fileSize: 200 * 1024 * 1024 } 
@@ -26,7 +26,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Middleware xác thực JWT Token từ Client
+// Middleware xác thực JWT
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -55,7 +55,6 @@ app.post('/api/login', async (req, res) => {
     const data = await response.json();
 
     if (data.success) {
-      // Mã hóa thông tin bot_token và chatId riêng biệt cho từng người dùng vào JWT
       const sessionToken = jwt.sign({
         token: data.token || process.env.BOT_TOKEN || "",
         chatId: data.chatId || process.env.CHAT_ID || "",
@@ -102,13 +101,13 @@ app.post('/api/save-backup', async (req, res) => {
   }
 });
 
-// API Upload Chunk lên Telegram với chống Rate Limit & Memory Buffer
+// API Upload Chunk lên Telegram với chống Rate Limit
 app.post('/api/upload-chunk', authenticateToken, upload.single('document'), async (req, res) => {
   try {
     const { token, chatId } = req.user;
 
     if (!token || !chatId || !req.file) {
-      return res.status(400).json({ success: false, message: "Thiếu dữ liệu upload hoặc Server chưa đăng nhập" });
+      return res.status(400).json({ success: false, message: "Thiếu dữ liệu upload" });
     }
 
     let attempts = 0;
@@ -146,13 +145,13 @@ app.post('/api/upload-chunk', authenticateToken, upload.single('document'), asyn
   }
 });
 
-// Proxy lấy Chunk từ Telegram an toàn
+// Proxy truyền tải dữ liệu Chunk trực tiếp
 app.get('/api/file-proxy', authenticateToken, async (req, res) => {
   try {
     const { fileId, filename } = req.query;
     const { token } = req.user;
 
-    if (!token || !fileId) return res.status(400).send("Thiếu thông số hoặc chưa đăng nhập");
+    if (!token || !fileId) return res.status(400).send("Thiếu thông số");
 
     let infoRes = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`);
     let infoData = await infoRes.json();
