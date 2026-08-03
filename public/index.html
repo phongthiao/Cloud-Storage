@@ -324,7 +324,6 @@
       document.getElementById('warningModal').classList.add('hidden');
     }
 
-    // 🟢 TỰ ĐỘNG NẠP BẢN SAO LƯU MỚI NHẤT TRÊN CÙNG KHI F5 HOẶC MỚI ĐĂNG NHẬP
     async function autoFetchLatestBackupOnStart() {
       if (!CURRENT_MTB) return;
       try {
@@ -332,7 +331,6 @@
         const listData = await res.json();
 
         if (listData && listData.length > 0) {
-          // Backend đã sắp xếp sẵn: listData[0] luôn là bản ghi mới nhất theo thời gian
           const latestItem = listData[0];
           const fullJsonData = latestItem.mainData || latestItem.backupData;
           
@@ -923,23 +921,22 @@
       }
     }
 
-    // 🟢 MODAL HIỂN THỊ CÁC BẢN LƯU VỚI BẢN MỚI NHẤT TRÊN CÙNG
     async function openBackupHistoryModal() {
       const modal = document.getElementById('backupModal');
       const container = document.getElementById('backupListContainer');
       modal.classList.remove('hidden');
-      container.innerHTML = `<div class="text-center py-6 text-amber-400 text-xs font-semibold">⏳ Đang lấy danh sách bản sao lưu...</div>`;
+      container.innerHTML = `<div class="text-center py-6 text-amber-400 text-xs font-semibold">⏳ Đang kiểm tra các bản lưu gần nhất...</div>`;
 
       try {
         const res = await fetch(`${BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(CURRENT_MTB)}&t=${Date.now()}`);
         const listData = await res.json();
 
         if (!listData || listData.length === 0) {
-          container.innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">Tài khoản này chưa có bản sao lưu nào trên Google Sheet.</div>`;
+          container.innerHTML = `<div class="text-center py-6 text-slate-500 text-xs">Tài khoản này chưa có bản sao lưu nào.</div>`;
           return;
         }
 
-        // Backend đã tự động sắp xếp theo thời gian mới nhất (Mới nhất nằm tại index 0)
+        // listData[0] luôn là bản có giờ mới nhất nằm ở trên cùng
         container.innerHTML = listData.map((item, index) => {
           const fullJsonData = item.mainData || item.backupData;
           const encodedData = encodeURIComponent(fullJsonData);
@@ -950,7 +947,7 @@
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
                   <div class="text-xs font-bold ${isFirst ? 'text-emerald-400' : 'text-slate-100'}">
-                    🕒 ${item.timeStr || item.time}
+                    🕒 ${item.timeStr || item.label}
                   </div>
                   ${isFirst ? '<span class="bg-emerald-500/20 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full font-bold border border-emerald-500/40 animate-pulse">🌟 MỚI NHẤT</span>' : ''}
                 </div>
@@ -1016,12 +1013,8 @@
       const progressBar = document.getElementById('storageProgressBar');
 
       if (!MAX_STORAGE_GB) {
-        if (storageUsageText) {
-          storageUsageText.innerText = "Đang cập nhật dung lượng...";
-        }
-        if (progressBar) {
-          progressBar.style.width = "0%";
-        }
+        if (storageUsageText) storageUsageText.innerText = "Đang cập nhật dung lượng...";
+        if (progressBar) progressBar.style.width = "0%";
         return;
       }
 
@@ -1029,12 +1022,8 @@
       const totalBytes = dbFiles.reduce((sum, item) => sum + (item.size || 0), 0);
       const usedPercentage = Math.min(100, ((totalBytes / maxBytes) * 100).toFixed(1));
       
-      if (storageUsageText) {
-        storageUsageText.innerText = `${formatBytes(totalBytes)} / ${MAX_STORAGE_GB} GB (${usedPercentage}%)`;
-      }
-      if (progressBar) {
-        progressBar.style.width = `${usedPercentage}%`;
-      }
+      if (storageUsageText) storageUsageText.innerText = `${formatBytes(totalBytes)} / ${MAX_STORAGE_GB} GB (${usedPercentage}%)`;
+      if (progressBar) progressBar.style.width = `${usedPercentage}%`;
     }
 
     function logout() {
