@@ -6,6 +6,7 @@ const FormData = require('form-data');
 const path = require('path');
 const fs = require('fs');
 const { pipeline } = require('stream');
+const cron = require('node-cron'); // Bổ sung cron job dọn rác
 
 const app = express();
 
@@ -30,8 +31,35 @@ app.use(express.static(path.join(__dirname, 'public')));
 const AUTH_API_URL = process.env.AUTH_API_URL || "https://script.google.com/macros/s/AKfycbw-RDeNdYzo7dMnmMRUV2jLkUSCmIN5Fk87suroVvo_bYjyyO05HEKXUcPyf_RLQ_A/exec";
 const BACKUP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyxpDyYr4IuQgWFTnQV6DDtrtWKDDjKiPYKjOSxgfL2PIDNCRNco5-v7OYux4wVFL-D/exec";
 
+// NÂNG CẤP BẢO MẬT: LƯU BOT_TOKEN VÀ CHAT_ID TẠI BACKEND SERVER
+// Khởi tạo biến lưu Credential cấu hình từ Server hoặc lấy sau khi xác thực thành công
+let SYSTEM_BOT_TOKEN = process.env.BOT_TOKEN || "";
+let SYSTEM_CHAT_ID = process.env.CHAT_ID || "";
+
 // Hàm hỗ trợ Sleep chống Rate Limit Telegram
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// CRON JOB: TỰ ĐỘNG DỌN DẸP FILE RÁC TRONG UPLOADS MỖI 30 PHÚT (XÓA FILE CŨ HƠN 1 GIỜ)
+cron.schedule('*/30 * * * *', () => {
+  console.log('[Cron Job] Đang kiểm tra dọn dẹp thư mục uploads...');
+  fs.readdir(uploadDir, (err, files) => {
+    if (err) return console.error('Lỗi đọc thư mục uploads:', err);
+    const now = Date.now();
+    files.forEach(file => {
+      const filePath = path.join(uploadDir, file);
+      fs.stat(filePath, (err, stats) => {
+        if (!err) {
+          // Nếu file tồn tại hơn 1 giờ (3600000 ms) -> Tiến hành xóa
+          if (now - stats.mtimeMs > 3600000) {
+            fs.unlink(filePath, (err) => {
+              if (!err) console.log(`[Cron Job] Đã xóa file rác quá hạn: ${file}`);
+            });
+          }
+        }
+      });
+    });
+  });
+});
 
 // 1. API Đăng nhập
 app.post('/api/login', async (req, res) => {
@@ -42,7 +70,21 @@ app.post('/api/login', async (req, res) => {
       body: JSON.stringify(req.body)
     });
     const data = await response.json();
-    res.json(data);
+
+    if (data.success) {
+      // Lưu lại Token & ChatId vào hệ thống Server
+      SYSTEM_BOT_TOKEN = data.token;
+      SYSTEM_CHAT_ID = data.chatId;
+
+      // Trả về cho Client nhưng KHÔNG trả Token và ChatID
+      res.json({
+        success: true,
+        maxGb: data.maxGb || 5,
+        mtb: req.body.mtb
+      });
+    } else {
+      res.json(data);
+    }
   } catch (err) {
     res.status(500).json({ success: false, message: "Lỗi hệ thống xác thực" });
   }
@@ -75,14 +117,16 @@ app.post('/api/save-backup', async (req, res) => {
   }
 });
 
-// 4. API Upload Chunk (Chống Tràn RAM + Xử Lý Lỗi 429 Retry-After Telegram)
+// 4. API Upload Chunk (Đã giấu Token về Server + Bảo đảm xóa đĩa tạm triệt để)
 app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
   const filePath = req.file ? req.file.path : null;
   try {
-    const { token, chatId } = req.body;
+    // Sử dụng Token & ChatID từ Server
+    const token = SYSTEM_BOT_TOKEN;
+    const chatId = SYSTEM_CHAT_ID;
+
     if (!token || !chatId || !req.file) {
-      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      return res.status(400).json({ success: false, message: "Thiếu dữ liệu upload" });
+      return res.status(400).json({ success: false, message: "Thiếu dữ liệu upload hoặc Server chưa đăng nhập" });
     }
 
     let attempts = 0;
@@ -110,8 +154,6 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
       }
     }
 
-    if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-
     if (tgData && tgData.ok && tgData.result.document) {
       res.json({ success: true, file_id: tgData.result.document.file_id });
     } else {
@@ -119,16 +161,26 @@ app.post('/api/upload-chunk', upload.single('document'), async (req, res) => {
     }
 
   } catch (err) {
-    if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
     res.status(500).json({ success: false, message: err.message });
+  } finally {
+    // ĐẢM BẢO XÓA FILE TẠM TRONG MỌI TRƯỜNG HỢP LỖI HOẶC THÀNH CÔNG
+    if (filePath && fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (e) {
+        console.error("Không thể xóa file tạm:", e);
+      }
+    }
   }
 });
 
-// 5. API Proxy Tải File Stream (Hỗ trợ HTTP Range Requests cho Tốc độ & Media Streaming)
+// 5. API Proxy Tải File Stream (Giấu Token về Server + Hỗ trợ Stream & Tua)
 app.get('/api/file-proxy', async (req, res) => {
   try {
-    const { token, fileId, filename } = req.query;
-    if (!token || !fileId) return res.status(400).send("Thiếu thông số");
+    const { fileId, filename } = req.query;
+    const token = SYSTEM_BOT_TOKEN;
+
+    if (!token || !fileId) return res.status(400).send("Thiếu thông số hoặc Server chưa khởi tạo Token");
 
     const infoRes = await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${fileId}`);
     const infoData = await infoRes.json();
