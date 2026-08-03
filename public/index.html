@@ -80,7 +80,7 @@
           <span id="userInfoBadge" class="text-xs bg-indigo-500/20 text-indigo-300 px-3 py-2 rounded-xl border border-indigo-500/30 font-mono">Thiết bị: ...</span>
 
           <button onclick="openBackupHistoryModal()" class="text-xs bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 px-3 py-2 rounded-xl transition font-semibold flex items-center gap-1">
-            📜 Bản Sao Lưu Mới Nhất
+            📜 Danh Sách Sao Lưu (1-4)
           </button>
 
           <button onclick="logout()" class="text-xs bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 px-3 py-2 rounded-xl transition">
@@ -218,12 +218,12 @@
     <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-700 pb-3">
         <h3 class="text-lg font-bold text-purple-400 flex items-center gap-2">
-          📜 Các Bản Sao Lưu Mới Nhất
+          📜 Danh Sách Bản Sao Lưu (1 đến 4)
         </h3>
         <button onclick="closeBackupModal()" class="text-slate-400 hover:text-white text-xl">&times;</button>
       </div>
       <div id="backupListContainer" class="space-y-3 max-h-80 overflow-y-auto pr-1">
-        <div class="text-center py-6 text-slate-400 text-xs">Đang kiểm tra các bản lưu gần nhất...</div>
+        <div class="text-center py-6 text-slate-400 text-xs">Đang tải danh sách...</div>
       </div>
       <div class="flex justify-end pt-2">
         <button onclick="closeBackupModal()" class="bg-slate-700 hover:bg-slate-600 text-xs text-white px-4 py-2 rounded-xl">Đóng</button>
@@ -324,6 +324,7 @@
       document.getElementById('warningModal').classList.add('hidden');
     }
 
+    // Khi F5 hoặc vào trang, luôn tự động nạp bản BACKUP_1 (mới nhất)
     async function autoFetchLatestBackupOnStart() {
       if (!CURRENT_MTB) return;
       try {
@@ -331,7 +332,7 @@
         const listData = await res.json();
 
         if (listData && listData.length > 0) {
-          const latestItem = listData[0];
+          const latestItem = listData[0]; // BACKUP_1 luôn ở phần tử đầu tiên
           const fullJsonData = latestItem.mainData || latestItem.backupData;
           
           if (fullJsonData) {
@@ -921,11 +922,12 @@
       }
     }
 
+    // HIỂN THỊ MODAL BẢN SAO LƯU ĐÚNG THỨ TỰ TỪ TRÊN XUỐNG DƯỚI (BACKUP_1 LÀ MỚI NHẤT Ở VỊ TRÍ 1)
     async function openBackupHistoryModal() {
       const modal = document.getElementById('backupModal');
       const container = document.getElementById('backupListContainer');
       modal.classList.remove('hidden');
-      container.innerHTML = `<div class="text-center py-6 text-amber-400 text-xs font-semibold">⏳ Đang kiểm tra các bản lưu gần nhất...</div>`;
+      container.innerHTML = `<div class="text-center py-6 text-amber-400 text-xs font-semibold">⏳ Đang lấy danh sách các bản sao lưu...</div>`;
 
       try {
         const res = await fetch(`${BACKUP_SCRIPT_URL}?mtb=${encodeURIComponent(CURRENT_MTB)}&t=${Date.now()}`);
@@ -936,11 +938,11 @@
           return;
         }
 
-        // listData[0] luôn là bản có giờ mới nhất nằm ở trên cùng
+        // listData giữ nguyên thứ tự Backend trả về từ hàng 1 đến hàng 4 (BACKUP_1 ở trên cùng)
         container.innerHTML = listData.map((item, index) => {
           const fullJsonData = item.mainData || item.backupData;
           const encodedData = encodeURIComponent(fullJsonData);
-          const isFirst = index === 0;
+          const isFirst = index === 0; // BACKUP_1 là mới nhất nằm trên cùng
           
           return `
             <div class="bg-slate-900 border ${isFirst ? 'border-emerald-500/80 shadow-lg shadow-emerald-500/10' : 'border-purple-500/30'} p-3.5 rounded-xl space-y-2.5 relative">
@@ -949,7 +951,7 @@
                   <div class="text-xs font-bold ${isFirst ? 'text-emerald-400' : 'text-slate-100'}">
                     🕒 ${item.timeStr || item.label}
                   </div>
-                  ${isFirst ? '<span class="bg-emerald-500/20 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full font-bold border border-emerald-500/40 animate-pulse">🌟 MỚI NHẤT</span>' : ''}
+                  ${isFirst ? '<span class="bg-emerald-500/20 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full font-bold border border-emerald-500/40 animate-pulse">🌟 MỚI NHẤT (BACKUP_1)</span>' : ''}
                 </div>
                 <span class="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded border border-purple-500/30">
                   MTB: ${CURRENT_MTB}
